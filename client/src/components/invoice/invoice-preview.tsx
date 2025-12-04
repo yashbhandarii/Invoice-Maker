@@ -23,14 +23,26 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
     const totalBalance = grandTotal - data.advance;
 
     return (
-      <div className="w-full overflow-auto bg-gray-100 p-8 flex justify-center">
+      <div className="w-full overflow-auto bg-gray-100 p-8 flex justify-center print:bg-white print:p-0 print:overflow-visible">
+        <style type="text/css" media="print">
+          {`
+            @page { 
+              size: A4; 
+              margin: 0; 
+            }
+            body {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+          `}
+        </style>
         <div 
           ref={ref}
-          className="bg-white w-[210mm] min-h-[297mm] p-4 md:p-8 shadow-xl text-black font-serif relative print:shadow-none print:w-full print:p-0"
+          className="bg-white w-[210mm] h-[297mm] p-4 md:p-8 shadow-xl text-black font-serif relative print:shadow-none print:w-full print:h-full print:p-4 overflow-hidden flex flex-col"
           style={{ fontSize: '14px' }}
         >
           {/* Main Border Container */}
-          <div className="border-[3px] border-primary h-full flex flex-col">
+          <div className="border-[3px] border-primary flex flex-col flex-1">
             
             {/* Header Section */}
             <div className="border-b-2 border-primary pb-2 relative">
@@ -179,43 +191,53 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
 
               {/* Right Side: Totals Calculation */}
               <div className="col-span-5">
-                <div className="grid grid-cols-2 border-b border-primary">
-                  <div className="p-1 pl-2 text-primary">Discount</div>
-                  <div className="p-1 pr-2 text-right border-l border-primary">{discountAmount.toFixed(2)}</div>
-                </div>
+                {discountAmount > 0 && (
+                  <div className="grid grid-cols-2 border-b border-primary">
+                    <div className="p-1 pl-2 text-primary">Discount</div>
+                    <div className="p-1 pr-2 text-right border-l border-primary">{discountAmount.toFixed(2)}</div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 border-b border-primary">
                   <div className="p-1 pl-2 text-primary">Total Amount</div>
                   <div className="p-1 pr-2 text-right border-l border-primary">{taxableAmount.toFixed(2)}</div>
                 </div>
-                <div className="grid grid-cols-2 border-b border-primary">
-                  <div className="p-1 pl-2 text-primary">Add. CGST</div>
-                  <div className="p-1 pr-2 text-right border-l border-primary flex justify-between">
-                    <span className="text-xs text-gray-500">{data.cgstRate}%</span>
-                    <span>{cgstAmount.toFixed(2)}</span>
+                {data.cgstRate > 0 && (
+                  <div className="grid grid-cols-2 border-b border-primary">
+                    <div className="p-1 pl-2 text-primary">Add. CGST</div>
+                    <div className="p-1 pr-2 text-right border-l border-primary flex justify-between">
+                      <span className="text-xs text-gray-500">{data.cgstRate}%</span>
+                      <span>{cgstAmount.toFixed(2)}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 border-b border-primary">
-                  <div className="p-1 pl-2 text-primary">Add. SGST</div>
-                  <div className="p-1 pr-2 text-right border-l border-primary flex justify-between">
-                    <span className="text-xs text-gray-500">{data.sgstRate}%</span>
-                    <span>{sgstAmount.toFixed(2)}</span>
+                )}
+                {data.sgstRate > 0 && (
+                  <div className="grid grid-cols-2 border-b border-primary">
+                    <div className="p-1 pl-2 text-primary">Add. SGST</div>
+                    <div className="p-1 pr-2 text-right border-l border-primary flex justify-between">
+                      <span className="text-xs text-gray-500">{data.sgstRate}%</span>
+                      <span>{sgstAmount.toFixed(2)}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 border-b border-primary">
-                  <div className="p-1 pl-2 text-primary">Add. IGST</div>
-                  <div className="p-1 pr-2 text-right border-l border-primary flex justify-between">
-                    <span className="text-xs text-gray-500">{data.igstRate}%</span>
-                    <span>{igstAmount.toFixed(2)}</span>
+                )}
+                {data.igstRate > 0 && (
+                  <div className="grid grid-cols-2 border-b border-primary">
+                    <div className="p-1 pl-2 text-primary">Add. IGST</div>
+                    <div className="p-1 pr-2 text-right border-l border-primary flex justify-between">
+                      <span className="text-xs text-gray-500">{data.igstRate}%</span>
+                      <span>{igstAmount.toFixed(2)}</span>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="grid grid-cols-2 border-b border-primary bg-[#fffdf0]">
                   <div className="p-1 pl-2 text-primary font-bold">GRAND TOTAL</div>
                   <div className="p-1 pr-2 text-right border-l border-primary font-bold text-lg">{grandTotal.toFixed(2)}</div>
                 </div>
-                <div className="grid grid-cols-2 border-b border-primary">
-                  <div className="p-1 pl-2 text-primary">ADVANCE</div>
-                  <div className="p-1 pr-2 text-right border-l border-primary">{data.advance.toFixed(2)}</div>
-                </div>
+                {data.advance > 0 && (
+                  <div className="grid grid-cols-2 border-b border-primary">
+                    <div className="p-1 pl-2 text-primary">ADVANCE</div>
+                    <div className="p-1 pr-2 text-right border-l border-primary">{data.advance.toFixed(2)}</div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 bg-[#fffdf0]">
                   <div className="p-1 pl-2 text-primary font-bold">TOTAL BALANCE</div>
                   <div className="p-1 pr-2 text-right border-l border-primary font-bold text-lg">{totalBalance.toFixed(2)}</div>
@@ -225,27 +247,9 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
 
             {/* Bank & Signature Footer */}
             <div className="border-t-2 border-primary p-2 relative">
-              <h3 className="text-primary font-bold uppercase text-xs mb-1">Bank Details</h3>
-              <div className="flex justify-between">
-                <div className="text-xs font-bold space-y-1 w-1/2">
-                   <div className="flex"><span className="w-20 text-primary">Bank Name</span> <span>: {data.bankName}</span></div>
-                   <div className="flex"><span className="w-20 text-primary">Bank A/c No.</span> <span>: {data.bankAccountNo}</span></div>
-                   <div className="flex"><span className="w-20 text-primary">IFSC Code No.</span> <span>: {data.bankIfsc}</span></div>
-                   <div className="flex"><span className="w-20 text-primary">Branch</span> <span>: {data.bankBranch}</span></div>
-                </div>
-                
-                <div className="flex flex-col justify-end items-center w-1/2 text-right pb-4">
-                   <div className="text-xs text-gray-500 mb-8">Receiver Signature & Stamp</div>
-                </div>
-              </div>
-
-              {/* Bottom Bank Duplicate? No, Image shows Bank Details again on bottom left. 
-                  Let's replicate the image exactly.
-                  Actually the image shows "BANK DETAILS" header twice. One small, one slightly bigger.
-                  It seems redundant but I will follow the image.
-              */}
+              {/* Bottom Bank Details - Single Instance */}
               
-              <div className="border-t border-gray-300 mt-2 pt-2 flex justify-between items-end">
+              <div className="flex justify-between items-end">
                  <div className="text-xs font-bold space-y-1">
                    <h3 className="text-primary font-bold uppercase text-xs mb-1">Bank Details</h3>
                    <div className="flex"><span className="w-20 text-primary">Bank Name</span> <span>: {data.bankName}</span></div>

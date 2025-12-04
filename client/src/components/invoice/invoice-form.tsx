@@ -82,8 +82,25 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
 
           <TabsContent value="items" className="space-y-4 mt-4">
             <Card>
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-lg">Line Items</CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => append({ 
+                    id: Math.random().toString(),
+                    hsnCode: "", 
+                    description: "", 
+                    qty: 1, 
+                    weight: 0, 
+                    rate: 0, 
+                    amount: 0 
+                  })}
+                >
+                  <Plus className="h-4 w-4 mr-2" /> Add Item
+                </Button>
               </CardHeader>
               <CardContent className="space-y-4">
                 {fields.map((field, index) => (
@@ -142,23 +159,11 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
                     </div>
                   </div>
                 ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 w-full border-dashed"
-                  onClick={() => append({ 
-                    id: Math.random().toString(),
-                    hsnCode: "", 
-                    description: "", 
-                    qty: 1, 
-                    weight: 0, 
-                    rate: 0, 
-                    amount: 0 
-                  })}
-                >
-                  <Plus className="h-4 w-4 mr-2" /> Add Item
-                </Button>
+                {fields.length === 0 && (
+                   <div className="text-center py-8 text-muted-foreground text-sm border-dashed border rounded-md">
+                      No items added. Click "Add Item" to start.
+                   </div>
+                )}
               </CardContent>
             </Card>
 

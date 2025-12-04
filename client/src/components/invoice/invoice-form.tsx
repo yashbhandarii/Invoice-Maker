@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Trash2, Printer, Save, UserPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useStore } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,6 +23,7 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
   const { toast } = useToast();
   const { clients, addClient, saveCurrentInvoice } = useStore();
   const [selectedClient, setSelectedClient] = useState<string>("");
+  const prevIdRef = useRef(defaultValues?.id);
 
   const form = useForm<InvoiceData>({
     resolver: zodResolver(invoiceSchema),
@@ -36,8 +37,10 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
   });
 
   // Reset form when defaultValues change (e.g. loading a saved invoice)
+  // CRITICAL: Only reset if the ID changes to avoid infinite loop with onUpdate
   useEffect(() => {
-    if (defaultValues) {
+    if (defaultValues && defaultValues.id !== prevIdRef.current) {
+      prevIdRef.current = defaultValues.id;
       form.reset(defaultValues);
     }
   }, [defaultValues, form]);

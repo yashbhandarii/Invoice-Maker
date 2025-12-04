@@ -10,7 +10,19 @@ export const lineItemSchema = z.object({
   amount: z.number().min(0),
 });
 
+export const clientSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  address: z.string().optional(),
+  gst: z.string().optional(),
+  stateCode: z.string().optional(),
+  transport: z.string().optional(),
+});
+
 export const invoiceSchema = z.object({
+  id: z.string().optional(), // Internal ID for the app
+  status: z.enum(["Paid", "Pending", "Overdue"]).default("Pending"),
+  
   // Seller Details
   sellerName: z.string().min(1, "Company Name is required"),
   sellerHindiName: z.string().optional(),
@@ -57,8 +69,10 @@ export const invoiceSchema = z.object({
 
 export type InvoiceData = z.infer<typeof invoiceSchema>;
 export type LineItem = z.infer<typeof lineItemSchema>;
+export type ClientData = z.infer<typeof clientSchema>;
 
 export const defaultInvoice: InvoiceData = {
+  status: "Pending",
   sellerName: "M/S. LALCHAND NEMICHAND BHANDARI",
   sellerHindiName: "मे. लालचंद 네मिचंद भंडारी",
   sellerSubtitle: "GENERAL MERCHANT & COMMISSION AGENT",

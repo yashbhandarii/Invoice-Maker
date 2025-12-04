@@ -1,11 +1,58 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Users, CreditCard, Calendar, FileText, CheckCircle2, AlertCircle } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { ArrowUpRight, Users, CreditCard, Calendar, FileText, CheckCircle2, AlertCircle, Scale } from "lucide-react";
 import reportImage from "@assets/generated_images/professional_invoice_dashboard_report_with_charts_and_table.png";
+import { useStore } from "@/lib/store";
+import { useMemo } from "react";
+import { format } from "date-fns";
+import { InvoiceData } from "@/lib/invoice-types";
 
 export function InvoiceDashboard() {
+  const { invoices, setCurrentInvoice } = useStore();
+
+  const stats = useMemo(() => {
+    const totalRevenue = invoices.reduce((acc, inv) => {
+      const subTotal = inv.items.reduce((s, i) => s + i.amount, 0);
+      const taxable = subTotal - (inv.discount || 0);
+      const taxes = taxable * ((inv.cgstRate || 0) + (inv.sgstRate || 0) + (inv.igstRate || 0)) / 100;
+      return acc + taxable + taxes;
+    }, 0);
+
+    const totalWeight = invoices.reduce((acc, inv) => {
+      return acc + inv.items.reduce((w, i) => w + (i.weight || 0), 0);
+    }, 0);
+
+    const outstanding = invoices
+      .filter(inv => inv.status === "Pending" || inv.status === "Overdue")
+      .reduce((acc, inv) => {
+        const subTotal = inv.items.reduce((s, i) => s + i.amount, 0);
+        const taxable = subTotal - (inv.discount || 0);
+        const taxes = taxable * ((inv.cgstRate || 0) + (inv.sgstRate || 0) + (inv.igstRate || 0)) / 100;
+        return acc + (taxable + taxes - (inv.advance || 0));
+      }, 0);
+
+    const paidCount = invoices.filter(inv => inv.status === "Paid").length;
+    const pendingCount = invoices.filter(inv => inv.status === "Pending").length;
+
+    return { totalRevenue, totalWeight, outstanding, paidCount, pendingCount };
+  }, [invoices]);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const getInvoiceTotal = (inv: InvoiceData) => {
+    const subTotal = inv.items.reduce((s, i) => s + i.amount, 0);
+    const taxable = subTotal - (inv.discount || 0);
+    const taxes = taxable * ((inv.cgstRate || 0) + (inv.sgstRate || 0) + (inv.igstRate || 0)) / 100;
+    return taxable + taxes;
+  };
+
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-full">
       <div className="flex justify-between items-center">
@@ -15,7 +62,9 @@ export function InvoiceDashboard() {
         </div>
         <div className="flex gap-2">
            <Button variant="outline">Export Report</Button>
-           <Button className="bg-primary text-white">New Invoice</Button>
+           <Button className="bg-primary text-white" onClick={() => window.document.getElementById('tab-invoice')?.click()}>
+             New Invoice
+           </Button>
         </div>
       </div>
 
@@ -26,9 +75,9 @@ export function InvoiceDashboard() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-sm font-medium text-slate-500">Total Revenue</p>
-                <h3 className="text-2xl font-bold mt-1">₹ 12,45,000</h3>
-                <p className="text-xs text-green-600 flex items-center mt-1">
-                  <ArrowUpRight className="h-3 w-3 mr-1" /> +12% from last month
+                <h3 className="text-2xl font-bold mt-1">{formatCurrency(stats.totalRevenue)}</h3>
+                <p className="text-xs text-slate-500 flex items-center mt-1">
+                   Total generated revenue
                 </p>
               </div>
               <div className="bg-primary/10 p-2 rounded-lg">
@@ -43,9 +92,9 @@ export function InvoiceDashboard() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-sm font-medium text-slate-500">Outstanding</p>
-                <h3 className="text-2xl font-bold mt-1">₹ 3,20,450</h3>
+                <h3 className="text-2xl font-bold mt-1">{formatCurrency(stats.outstanding)}</h3>
                 <p className="text-xs text-orange-600 flex items-center mt-1">
-                  <AlertCircle className="h-3 w-3 mr-1" /> 5 invoices pending
+                  <AlertCircle className="h-3 w-3 mr-1" /> {stats.pendingCount} invoices pending
                 </p>
               </div>
               <div className="bg-orange-100 p-2 rounded-lg">
@@ -55,18 +104,18 @@ export function InvoiceDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-green-500 shadow-sm">
+        <Card className="border-l-4 border-l-blue-500 shadow-sm">
           <CardContent className="p-6">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-sm font-medium text-slate-500">Paid Invoices</p>
-                <h3 className="text-2xl font-bold mt-1">142</h3>
+                <p className="text-sm font-medium text-slate-500">Total Weight</p>
+                <h3 className="text-2xl font-bold mt-1">{stats.totalWeight.toFixed(2)} kg</h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Last 30 days
+                  Total goods weight
                 </p>
               </div>
-              <div className="bg-green-100 p-2 rounded-lg">
-                <CheckCircle2 className="h-6 w-6 text-green-500" />
+              <div className="bg-blue-100 p-2 rounded-lg">
+                <Scale className="h-6 w-6 text-blue-500" />
               </div>
             </div>
           </CardContent>
@@ -98,32 +147,40 @@ export function InvoiceDashboard() {
              <CardTitle>Recent Invoices</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y">
-              {[
-                { id: "INV-2024-001", client: "Acme Corp", amount: "₹ 45,000", date: "04 Dec 2024", status: "Paid" },
-                { id: "INV-2024-002", client: "Globex Inc", amount: "₹ 12,500", date: "03 Dec 2024", status: "Pending" },
-                { id: "INV-2024-003", client: "Soylent Corp", amount: "₹ 8,200", date: "01 Dec 2024", status: "Overdue" },
-                { id: "INV-2024-004", client: "Umbrella Corp", amount: "₹ 1,20,000", date: "28 Nov 2024", status: "Paid" },
-                { id: "INV-2024-005", client: "Stark Ind", amount: "₹ 65,400", date: "25 Nov 2024", status: "Pending" },
-              ].map((inv) => (
-                <div key={inv.id} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
-                   <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 p-2 rounded text-primary">
-                         <FileText className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{inv.client}</p>
-                        <p className="text-xs text-slate-500">{inv.id} • {inv.date}</p>
-                      </div>
-                   </div>
-                   <div className="text-right">
-                      <p className="font-bold text-sm">{inv.amount}</p>
-                      <Badge variant={inv.status === "Paid" ? "default" : inv.status === "Pending" ? "secondary" : "destructive"} className={`text-[10px] h-5 px-2 ${inv.status === "Paid" ? "bg-green-500 hover:bg-green-600" : inv.status === "Pending" ? "bg-orange-400 hover:bg-orange-500 text-white" : ""}`}>
-                        {inv.status}
-                      </Badge>
-                   </div>
+            <div className="divide-y max-h-[400px] overflow-auto">
+              {invoices.length === 0 ? (
+                <div className="p-8 text-center text-slate-500">
+                  No invoices created yet.
                 </div>
-              ))}
+              ) : (
+                invoices.slice().reverse().map((inv, idx) => {
+                  const total = getInvoiceTotal(inv);
+                  const weight = inv.items.reduce((w, i) => w + (i.weight || 0), 0);
+                  
+                  return (
+                    <div key={idx} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setCurrentInvoice(inv)}>
+                       <div className="flex items-center gap-3">
+                          <div className="bg-primary/10 p-2 rounded text-primary">
+                             <FileText className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{inv.buyerName || "Unknown Buyer"}</p>
+                            <p className="text-xs text-slate-500">#{inv.invoiceNo} • {inv.date ? format(new Date(inv.date), 'dd MMM yyyy') : 'No Date'}</p>
+                          </div>
+                       </div>
+                       <div className="text-right">
+                          <p className="font-bold text-sm">{formatCurrency(total)}</p>
+                          <div className="flex gap-2 justify-end mt-1">
+                            {weight > 0 && <span className="text-[10px] bg-slate-100 px-1 rounded text-slate-600">{weight.toFixed(1)}kg</span>}
+                            <Badge variant={inv.status === "Paid" ? "default" : inv.status === "Pending" ? "secondary" : "destructive"} className={`text-[10px] h-5 px-2 ${inv.status === "Paid" ? "bg-green-500 hover:bg-green-600" : inv.status === "Pending" ? "bg-orange-400 hover:bg-orange-500 text-white" : ""}`}>
+                              {inv.status}
+                            </Badge>
+                          </div>
+                       </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </CardContent>
         </Card>

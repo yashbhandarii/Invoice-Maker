@@ -12,6 +12,7 @@ import { Plus, Trash2, Printer, Save, UserPlus } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useStore } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
+import { useClients, useAddClient, useAddInvoice, useUpdateInvoice } from "@/lib/api";
 
 interface InvoiceFormProps {
   defaultValues: InvoiceData;
@@ -21,7 +22,10 @@ interface InvoiceFormProps {
 
 export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormProps) {
   const { toast } = useToast();
-  const { clients, addClient, saveCurrentInvoice } = useStore();
+  const { data: clients = [] } = useClients();
+  const addClientMutation = useAddClient();
+  const addInvoiceMutation = useAddInvoice();
+  const updateInvoiceMutation = useUpdateInvoice();
   const [selectedClient, setSelectedClient] = useState<string>("");
   const prevIdRef = useRef(defaultValues?.id);
 
@@ -70,24 +74,25 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
     });
   }, [JSON.stringify(items.map(i => ({ q: i.qty, w: i.weight, r: i.rate })))]);
 
-  const handleSaveClient = () => {
+  const handleSaveClient = async () => {
     const data = getValues();
     if (!data.buyerName) {
       toast({ title: "Error", description: "Buyer name is required to save client.", variant: "destructive" });
       return;
     }
     
-    const newClient: ClientData = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: data.buyerName,
-      address: data.buyerAddress,
-      gst: data.buyerGst,
-      stateCode: data.buyerStateCode,
-      transport: data.buyerThrough
-    };
-    
-    addClient(newClient);
-    toast({ title: "Success", description: "Client saved successfully." });
+    try {
+      await addClientMutation.mutateAsync({
+        name: data.buyerName,
+        address: data.buyerAddress,
+        gst: data.buyerGst,
+        stateCode: data.buyerStateCode,
+        transport: data.buyerThrough
+      });
+      toast({ title: "Success", description: "Client saved successfully." });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to save client.", variant: "destructive" });
+    }
   };
 
   const handleClientSelect = (clientId: string) => {
@@ -102,9 +107,29 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
     }
   };
 
-  const handleSaveInvoice = () => {
-     saveCurrentInvoice();
-     toast({ title: "Success", description: "Invoice saved to dashboard." });
+  const handleSaveInvoice = async () => {
+    const currentData = getValues();
+    
+    try {
+      if (currentData.id) {
+        // Update existing invoice
+        await updateInvoiceMutation.mutateAsync({
+          id: currentData.id,
+          data: currentData
+        });
+        toast({ title: "Success", description: "Invoice updated successfully." });
+      } else {
+        // Create new invoice
+        await addInvoiceMutation.mutateAsync(currentData);
+        toast({ title: "Success", description: "Invoice saved successfully." });
+      }
+    } catch (error: any) {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to save invoice.", 
+        variant: "destructive" 
+      });
+    }
   };
 
   return (
@@ -276,7 +301,7 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
                 <CardTitle className="text-base">Buyer Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 p-3">
-                {clients.length > 0 && (
+                {clients && clients.length > 0 && (
                    <div className="mb-4">
                       <Label className="text-xs mb-1 block">Load Saved Client</Label>
                       <Select onValueChange={handleClientSelect} value={selectedClient}>

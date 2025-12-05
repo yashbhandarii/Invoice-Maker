@@ -7,9 +7,11 @@ import { useStore } from "@/lib/store";
 import { useMemo } from "react";
 import { format } from "date-fns";
 import { InvoiceData } from "@/lib/invoice-types";
+import { useInvoices } from "@/lib/api";
 
 export function InvoiceDashboard() {
-  const { invoices, setCurrentInvoice } = useStore();
+  const { data: invoices = [], isLoading } = useInvoices();
+  const { setCurrentInvoice, resetCurrentInvoice } = useStore();
 
   const stats = useMemo(() => {
     const totalRevenue = invoices.reduce((acc, inv) => {
@@ -62,7 +64,10 @@ export function InvoiceDashboard() {
         </div>
         <div className="flex gap-2">
            <Button variant="outline">Export Report</Button>
-           <Button className="bg-primary text-white" onClick={() => window.document.getElementById('tab-invoice')?.click()}>
+           <Button className="bg-primary text-white" onClick={() => {
+             resetCurrentInvoice();
+             window.document.getElementById('tab-invoice')?.click();
+           }}>
              New Invoice
            </Button>
         </div>
@@ -148,7 +153,11 @@ export function InvoiceDashboard() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y max-h-[400px] overflow-auto">
-              {invoices.length === 0 ? (
+              {isLoading ? (
+                <div className="p-8 text-center text-slate-500">
+                  Loading invoices...
+                </div>
+              ) : invoices.length === 0 ? (
                 <div className="p-8 text-center text-slate-500">
                   No invoices created yet.
                 </div>
@@ -158,7 +167,10 @@ export function InvoiceDashboard() {
                   const weight = inv.items.reduce((w, i) => w + (i.weight || 0), 0);
                   
                   return (
-                    <div key={idx} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setCurrentInvoice(inv)}>
+                    <div key={idx} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => {
+                      setCurrentInvoice(inv);
+                      window.document.getElementById('tab-invoice')?.click();
+                    }}>
                        <div className="flex items-center gap-3">
                           <div className="bg-primary/10 p-2 rounded text-primary">
                              <FileText className="h-4 w-4" />

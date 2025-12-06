@@ -1,0 +1,62 @@
+node.exe : 
+node:events:486
+At line:1 char:1
++ & "C:\Program Files
+\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (node:ev   
+ ents:486:String)    
+ [], RemoteExcep    
+tion
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+      throw er; // 
+Unhandled 'error' 
+event
+      ^
+
+Error: listen 
+ENOTSUP: operation 
+not supported on 
+socket ::1:5000
+    at Server.setupLi
+stenHandle [as 
+_listen2] 
+(node:net:1918:21)
+    at 
+listenInCluster 
+(node:net:1997:12)
+    at GetAddrInfoReq
+Wrap.callback 
+(node:net:2206:7)
+    at GetAddrInfoReq
+Wrap.onlookupall [as 
+oncomplete] 
+(node:dns:133:8)
+Emitted 'error' 
+event on Server 
+instance at:
+    at emitErrorNT 
+(node:net:1976:8)
+    at process.proces
+sTicksAndRejections (
+node:internal/process
+/task_queues:89:21) {
+  code: 'ENOTSUP',
+  errno: -4049,
+  syscall: 'listen',
+  address: '::1',
+  port: 5000
+}
+
+Node.js v25.2.1

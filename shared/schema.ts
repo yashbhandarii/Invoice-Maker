@@ -1,9 +1,9 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 
-// Users table (keeping existing for compatibility)
+// Users table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
@@ -45,7 +45,7 @@ export const invoices = pgTable("invoices", {
   invoiceNo: text("invoice_no").notNull().unique(),
   status: text("status").notNull().default("Pending"), // Paid, Pending, Overdue
   date: text("date").notNull(),
-  
+
   // Seller details
   sellerName: text("seller_name").notNull(),
   sellerHindiName: text("seller_hindi_name"),
@@ -55,33 +55,33 @@ export const invoices = pgTable("invoices", {
   sellerGst: text("seller_gst"),
   sellerContact1: text("seller_contact1"),
   sellerContact2: text("seller_contact2"),
-  
+
   // Buyer details
   buyerName: text("buyer_name").notNull(),
   buyerAddress: text("buyer_address"),
   buyerThrough: text("buyer_through"),
   buyerGst: text("buyer_gst"),
   buyerStateCode: text("buyer_state_code"),
-  
+
   // Invoice meta
   vehicleNo: text("vehicle_no"),
-  
+
   // Line items stored as JSON
   items: jsonb("items").notNull(),
-  
+
   // Totals
   discount: real("discount").default(0).notNull(),
   cgstRate: real("cgst_rate").default(0).notNull(),
   sgstRate: real("sgst_rate").default(0).notNull(),
   igstRate: real("igst_rate").default(0).notNull(),
   advance: real("advance").default(0).notNull(),
-  
+
   // Bank details
   bankName: text("bank_name"),
   bankAccountNo: text("bank_account_no"),
   bankIfsc: text("bank_ifsc"),
   bankBranch: text("bank_branch"),
-  
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

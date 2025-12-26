@@ -9,21 +9,27 @@ interface InvoicePreviewProps {
 
 export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewProps>(
   ({ data }, ref) => {
-    
+
     // Calculate totals
-    const subTotal = data.items.reduce((acc, item) => acc + item.amount, 0);
-    const discountAmount = data.discount; // Assuming fixed amount, not percent
+    // Calculate totals
+    const subTotal = data.items.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+    const discountAmount = Number(data.discount) || 0;
     const taxableAmount = subTotal - discountAmount;
-    
-    const cgstAmount = (taxableAmount * data.cgstRate) / 100;
-    const sgstAmount = (taxableAmount * data.sgstRate) / 100;
-    const igstAmount = (taxableAmount * data.igstRate) / 100;
-    
+
+    const cgstRate = Number(data.cgstRate) || 0;
+    const sgstRate = Number(data.sgstRate) || 0;
+    const igstRate = Number(data.igstRate) || 0;
+    const advance = Number(data.advance) || 0;
+
+    const cgstAmount = (taxableAmount * cgstRate) / 100;
+    const sgstAmount = (taxableAmount * sgstRate) / 100;
+    const igstAmount = (taxableAmount * igstRate) / 100;
+
     const grandTotal = taxableAmount + cgstAmount + sgstAmount + igstAmount;
-    const totalBalance = grandTotal - data.advance;
+    const totalBalance = grandTotal - advance;
 
     return (
-      <div className="w-full overflow-auto bg-gray-100 p-8 flex justify-center print:bg-white print:p-0 print:overflow-visible">
+      <div className="w-full overflow-auto bg-gray-100 p-8 flex justify-center print:bg-white print:p-0 print:overflow-hidden">
         <style type="text/css" media="print">
           {`
             @page { 
@@ -36,14 +42,14 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
             }
           `}
         </style>
-        <div 
+        <div
           ref={ref}
-          className="bg-white w-[210mm] h-[297mm] p-4 md:p-8 shadow-xl text-black font-serif relative print:shadow-none print:w-full print:h-full print:p-4 overflow-hidden flex flex-col"
+          className="bg-white w-[210mm] h-[297mm] p-4 md:p-8 shadow-xl text-black font-serif relative print:shadow-none print:w-[210mm] print:h-[297mm] print:p-4 overflow-hidden flex flex-col"
           style={{ fontSize: '14px' }}
         >
           {/* Main Border Container */}
           <div className="border-[3px] border-primary flex flex-col flex-1">
-            
+
             {/* Header Section */}
             <div className="border-b-2 border-primary pb-2 relative">
               <div className="flex justify-between text-[10px] px-2 pt-1 text-primary font-bold">
@@ -54,7 +60,7 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
                   <div>{data.sellerContact2}</div>
                 </div>
               </div>
-              
+
               <div className="text-left px-2 text-[10px] text-primary font-bold">
                 State : Maharashtra State Code : 27
               </div>
@@ -68,13 +74,13 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
                     {data.sellerHindiName}
                   </h2>
                 )}
-                
+
                 <div className="flex justify-center mt-2">
                   <span className="bg-primary text-white px-4 py-1 font-bold text-sm rounded-sm uppercase tracking-wider">
                     {data.sellerSubtitle}
                   </span>
                 </div>
-                
+
                 <div className="mt-2 font-bold text-primary text-sm space-y-1">
                   <div>
                     <span className="mr-4">PAN No: {data.sellerPan}</span>
@@ -116,7 +122,7 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
               {/* Right Side: Invoice Meta */}
               <div className="col-span-5 p-2 flex flex-col justify-between">
                 <div className="text-center mb-2">
-                   <span className="text-primary font-bold text-lg border-b border-primary inline-block px-2">TAX INVOICE</span>
+                  <span className="text-primary font-bold text-lg border-b border-primary inline-block px-2">TAX INVOICE</span>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center">
@@ -138,55 +144,52 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
             </div>
 
             {/* Items Table */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-h-0">
               {/* Table Header */}
               <div className="grid grid-cols-12 text-center font-bold text-primary border-b-2 border-primary bg-[#fffdf0]">
-                <div className="col-span-2 py-2 border-r border-primary flex items-center justify-center">HSN<br/>Code</div>
-                <div className="col-span-5 py-2 border-r border-primary flex items-center justify-center">Description Of Goods</div>
+                <div className="col-span-2 py-2 border-r border-primary flex items-center justify-center">HSN<br />Code</div>
+                <div className="col-span-4 py-2 border-r border-primary flex items-center justify-center">Description Of Goods</div>
                 <div className="col-span-1 py-2 border-r border-primary flex items-center justify-center">Qty.</div>
-                <div className="col-span-1 py-2 border-r border-primary flex items-center justify-center">Weight</div>
+                <div className="col-span-2 py-2 border-r border-primary flex items-center justify-center">Weight</div>
                 <div className="col-span-1 py-2 border-r border-primary flex items-center justify-center">Rate</div>
                 <div className="col-span-2 py-2 flex items-center justify-center">Amount</div>
               </div>
 
               {/* Table Rows */}
-              <div className="flex-1 relative">
-                 {/* Vertical Grid Lines - Absolute positioned to stretch full height */}
-                 <div className="absolute inset-0 grid grid-cols-12 pointer-events-none">
-                    <div className="col-span-2 border-r border-primary h-full"></div>
-                    <div className="col-span-5 border-r border-primary h-full"></div>
-                    <div className="col-span-1 border-r border-primary h-full"></div>
-                    <div className="col-span-1 border-r border-primary h-full"></div>
-                    <div className="col-span-1 border-r border-primary h-full"></div>
-                    <div className="col-span-2 h-full"></div>
-                 </div>
+              <div className="flex-1 relative min-h-0 overflow-hidden">
+                {/* Vertical Grid Lines - Absolute positioned to stretch full height */}
+                <div className="absolute inset-0 grid grid-cols-12 pointer-events-none">
+                  <div className="col-span-2 border-r border-primary h-full"></div>
+                  <div className="col-span-4 border-r border-primary h-full"></div>
+                  <div className="col-span-1 border-r border-primary h-full"></div>
+                  <div className="col-span-2 border-r border-primary h-full"></div>
+                  <div className="col-span-1 border-r border-primary h-full"></div>
+                  <div className="col-span-2 h-full"></div>
+                </div>
 
-                 {/* Data Rows */}
-                 {data.items.map((item, index) => (
-                   <div key={item.id} className="grid grid-cols-12 text-center relative z-10">
-                     <div className="col-span-2 py-1 px-1">{item.hsnCode}</div>
-                     <div className="col-span-5 py-1 px-2 text-left">{item.description}</div>
-                     <div className="col-span-1 py-1 px-1">{item.qty}</div>
-                     <div className="col-span-1 py-1 px-1">{item.weight?.toFixed(2)}</div>
-                     <div className="col-span-1 py-1 px-1">{item.rate.toFixed(2)}</div>
-                     <div className="col-span-2 py-1 px-2 font-bold text-right">{item.amount.toFixed(2)}</div>
-                   </div>
-                 ))}
-                 
-                 {/* Empty space filler */}
-                 <div className="min-h-[100px]"></div>
+                {/* Data Rows */}
+                {data.items.map((item, index) => (
+                  <div key={item.id} className="grid grid-cols-12 text-center relative z-10">
+                    <div className="col-span-2 py-1 px-1">{item.hsnCode}</div>
+                    <div className="col-span-4 py-1 px-2 text-left">{item.description}</div>
+                    <div className="col-span-1 py-1 px-1">{item.qty}</div>
+                    <div className="col-span-2 py-1 px-1">{item.weight?.toFixed(2)}</div>
+                    <div className="col-span-1 py-1 px-1">{item.rate.toFixed(2)}</div>
+                    <div className="col-span-2 py-1 px-2 font-bold text-right">{item.amount.toFixed(2)}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
             {/* Footer Totals Section */}
             <div className="border-t-2 border-primary grid grid-cols-12">
-              
+
               {/* Left Side: Amount in Words */}
               <div className="col-span-7 p-2 border-r-2 border-primary flex flex-col">
-                 <div className="text-primary font-bold mb-1">Rupees in words :</div>
-                 <div className="font-serif italic text-lg leading-relaxed border-b border-gray-300 pb-1">
-                   {numberToWords(grandTotal)}
-                 </div>
+                <div className="text-primary font-bold mb-1">Rupees in words :</div>
+                <div className="font-serif italic text-lg leading-relaxed border-b border-gray-300 pb-1">
+                  {numberToWords(grandTotal)}
+                </div>
               </div>
 
               {/* Right Side: Totals Calculation */}
@@ -248,24 +251,24 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
             {/* Bank & Signature Footer */}
             <div className="border-t-2 border-primary p-2 relative">
               {/* Bottom Bank Details - Single Instance */}
-              
+
               <div className="flex justify-between items-end">
-                 <div className="text-xs font-bold space-y-1">
-                   <h3 className="text-primary font-bold uppercase text-xs mb-1">Bank Details</h3>
-                   <div className="flex"><span className="w-20 text-primary">Bank Name</span> <span>: {data.bankName}</span></div>
-                   <div className="flex"><span className="w-20 text-primary">Bank A/c No.</span> <span>: {data.bankAccountNo}</span></div>
-                   <div className="flex"><span className="w-20 text-primary">IFSC Code No.</span> <span>: {data.bankIfsc}</span></div>
-                   <div className="flex"><span className="w-20 text-primary">Branch</span> <span>: {data.bankBranch}</span></div>
-                 </div>
-                 
-                 <div className="text-center">
-                    <div className="text-xs text-primary font-bold mb-8">For {data.sellerName}</div>
-                    <div className="text-xs italic text-gray-600 text-right">Proprietor</div>
-                 </div>
+                <div className="text-xs font-bold space-y-1">
+                  <h3 className="text-primary font-bold uppercase text-xs mb-1">Bank Details</h3>
+                  <div className="flex"><span className="w-20 text-primary">Bank Name</span> <span>: {data.bankName}</span></div>
+                  <div className="flex"><span className="w-20 text-primary">Bank A/c No.</span> <span>: {data.bankAccountNo}</span></div>
+                  <div className="flex"><span className="w-20 text-primary">IFSC Code No.</span> <span>: {data.bankIfsc}</span></div>
+                  <div className="flex"><span className="w-20 text-primary">Branch</span> <span>: {data.bankBranch}</span></div>
+                </div>
+
+                <div className="text-center">
+                  <div className="text-xs text-primary font-bold mb-8">For {data.sellerName}</div>
+                  <div className="text-xs italic text-gray-600 text-right">Proprietor</div>
+                </div>
               </div>
 
             </div>
-            
+
           </div>
         </div>
       </div>

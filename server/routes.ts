@@ -8,7 +8,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
   // Client Routes
   app.get("/api/clients", async (req, res) => {
     try {
@@ -19,7 +19,7 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to fetch clients" });
     }
   });
-  
+
   app.post("/api/clients", async (req, res) => {
     try {
       const validatedData = insertClientSchema.parse(req.body);
@@ -34,7 +34,7 @@ export async function registerRoutes(
       }
     }
   });
-  
+
   app.delete("/api/clients/:id", async (req, res) => {
     try {
       await storage.deleteClient(req.params.id);
@@ -44,7 +44,7 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to delete client" });
     }
   });
-  
+
   // Invoice Routes
   app.get("/api/invoices", async (req, res) => {
     try {
@@ -55,7 +55,7 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to fetch invoices" });
     }
   });
-  
+
   app.get("/api/invoices/:id", async (req, res) => {
     try {
       const invoice = await storage.getInvoice(req.params.id);
@@ -69,18 +69,18 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to fetch invoice" });
     }
   });
-  
+
   app.post("/api/invoices", async (req, res) => {
     try {
       const validatedData = insertInvoiceSchema.parse(req.body);
-      
+
       // Check if invoice number already exists
       const existing = await storage.getInvoiceByNo(validatedData.invoiceNo);
       if (existing) {
         res.status(409).json({ error: "Invoice number already exists" });
         return;
       }
-      
+
       const invoice = await storage.createInvoice(validatedData);
       res.status(201).json(invoice);
     } catch (error) {
@@ -92,28 +92,28 @@ export async function registerRoutes(
       }
     }
   });
-  
+
   app.patch("/api/invoices/:id", async (req, res) => {
     try {
       const updateData = insertInvoiceSchema.partial().parse(req.body);
       const invoice = await storage.updateInvoice(req.params.id, updateData);
-      
+
       if (!invoice) {
         res.status(404).json({ error: "Invoice not found" });
         return;
       }
-      
+
       res.json(invoice);
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: "Invalid invoice data", details: error.errors });
       } else {
         console.error("Error updating invoice:", error);
-        res.status(500).json({ error: "Failed to update invoice" });
+        res.status(500).json({ error: error instanceof Error ? error.message : "Failed to update invoice" });
       }
     }
   });
-  
+
   app.delete("/api/invoices/:id", async (req, res) => {
     try {
       await storage.deleteInvoice(req.params.id);

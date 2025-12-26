@@ -67,7 +67,7 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
       const weight = Number(item.weight) || 0;
       const rate = Number(item.rate) || 0;
       const calculatedAmount = (weight > 0 ? weight : qty) * rate;
-      
+
       if (item.amount !== calculatedAmount) {
         setValue(`items.${index}.amount`, calculatedAmount);
       }
@@ -80,7 +80,7 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
       toast({ title: "Error", description: "Buyer name is required to save client.", variant: "destructive" });
       return;
     }
-    
+
     try {
       await addClientMutation.mutateAsync({
         name: data.buyerName,
@@ -108,26 +108,61 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
   };
 
   const handleSaveInvoice = async () => {
-    const currentData = getValues();
-    
+    const rawData = getValues();
+
+    // Sanitize data to ensure numbers are valid and ID is handled correctly
+    const cleanData = {
+      ...rawData,
+      discount: Number(rawData.discount) || 0,
+      cgstRate: Number(rawData.cgstRate) || 0,
+      sgstRate: Number(rawData.sgstRate) || 0,
+      igstRate: Number(rawData.igstRate) || 0,
+      advance: Number(rawData.advance) || 0,
+      items: rawData.items.map(item => ({
+        ...item,
+        qty: Number(item.qty) || 0,
+        weight: Number(item.weight) || 0,
+        rate: Number(item.rate) || 0,
+        amount: Number(item.amount) || 0,
+      }))
+    };
+
+    // Remove empty ID to let server/database generate it
+    if (!cleanData.id) {
+      delete cleanData.id;
+    }
+
     try {
-      if (currentData.id) {
+      if (cleanData.id) {
         // Update existing invoice
-        await updateInvoiceMutation.mutateAsync({
-          id: currentData.id,
-          data: currentData
-        });
-        toast({ title: "Success", description: "Invoice updated successfully." });
+        try {
+          await updateInvoiceMutation.mutateAsync({
+            id: cleanData.id,
+            data: cleanData
+          });
+          toast({ title: "Success", description: "Invoice updated successfully." });
+        } catch (updateError: any) {
+          // If update fails because ID not found (404), try to create as new
+          if (updateError.message && updateError.message.toLowerCase().includes("not found")) {
+            console.warn("Invoice ID not found during update, creating new invoice instead...");
+            delete cleanData.id;
+            await addInvoiceMutation.mutateAsync(cleanData);
+            toast({ title: "Success", description: "Original ID not found. Created as new invoice." });
+          } else {
+            throw updateError;
+          }
+        }
       } else {
         // Create new invoice
-        await addInvoiceMutation.mutateAsync(currentData);
+        await addInvoiceMutation.mutateAsync(cleanData);
         toast({ title: "Success", description: "Invoice saved successfully." });
       }
     } catch (error: any) {
-      toast({ 
-        title: "Error", 
-        description: error.message || "Failed to save invoice.", 
-        variant: "destructive" 
+      console.error("Save error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save invoice.",
+        variant: "destructive"
       });
     }
   };
@@ -137,14 +172,14 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
       <div className="flex justify-between items-center gap-2 flex-wrap">
         <h2 className="text-xl font-bold tracking-tight">Editor</h2>
         <div className="flex gap-2">
-           <Button onClick={handleSaveInvoice} variant="outline" size="sm" className="h-8">
-             <Save className="w-4 h-4 mr-2" />
-             Save
-           </Button>
-           <Button onClick={onPrint} variant="default" size="sm" className="bg-primary text-white hover:bg-primary/90 h-8">
-             <Printer className="w-4 h-4 mr-2" />
-             Print
-           </Button>
+          <Button onClick={handleSaveInvoice} variant="outline" size="sm" className="h-8">
+            <Save className="w-4 h-4 mr-2" />
+            Save
+          </Button>
+          <Button onClick={onPrint} variant="default" size="sm" className="bg-primary text-white hover:bg-primary/90 h-8">
+            <Printer className="w-4 h-4 mr-2" />
+            Print
+          </Button>
         </div>
       </div>
 
@@ -167,14 +202,14 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
                   variant="outline"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={() => append({ 
+                  onClick={() => append({
                     id: Math.random().toString(),
-                    hsnCode: "", 
-                    description: "", 
-                    qty: 1, 
-                    weight: 0, 
-                    rate: 0, 
-                    amount: 0 
+                    hsnCode: "",
+                    description: "",
+                    qty: 1,
+                    weight: 0,
+                    rate: 0,
+                    amount: 0
                   })}
                 >
                   <Plus className="h-3 w-3 mr-1" /> Add Item
@@ -194,59 +229,59 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
-                    
+
                     <div className="grid grid-cols-12 gap-2">
-                       <div className="col-span-3">
-                          <Label className="text-[10px] uppercase text-muted-foreground">HSN Code</Label>
-                          <Input {...register(`items.${index}.hsnCode`)} className="h-7 text-xs bg-white" placeholder="HSN" />
-                       </div>
-                       <div className="col-span-9">
-                          <Label className="text-[10px] uppercase text-muted-foreground">Description</Label>
-                          <Input {...register(`items.${index}.description`)} className="h-7 text-xs bg-white" placeholder="Item Description" />
-                       </div>
+                      <div className="col-span-3">
+                        <Label className="text-[10px] uppercase text-muted-foreground">HSN Code</Label>
+                        <Input {...register(`items.${index}.hsnCode`)} className="h-7 text-xs bg-white" placeholder="HSN" />
+                      </div>
+                      <div className="col-span-9">
+                        <Label className="text-[10px] uppercase text-muted-foreground">Description</Label>
+                        <Input {...register(`items.${index}.description`)} className="h-7 text-xs bg-white" placeholder="Item Description" />
+                      </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-4 gap-2">
-                       <div>
-                          <Label className="text-[10px] uppercase text-muted-foreground">Qty</Label>
-                          <Input 
-                            type="number" 
-                            step="any" 
-                            {...register(`items.${index}.qty`, { valueAsNumber: true })} 
-                            className="h-7 text-xs bg-white" 
-                          />
-                       </div>
-                       <div>
-                          <Label className="text-[10px] uppercase text-muted-foreground">Weight</Label>
-                          <Input 
-                            type="number" 
-                            step="any" 
-                            {...register(`items.${index}.weight`, { valueAsNumber: true })} 
-                            className="h-7 text-xs bg-white" 
-                          />
-                       </div>
-                       <div>
-                          <Label className="text-[10px] uppercase text-muted-foreground">Rate</Label>
-                          <Input 
-                            type="number" 
-                            step="any" 
-                            {...register(`items.${index}.rate`, { valueAsNumber: true })} 
-                            className="h-7 text-xs bg-white" 
-                          />
-                       </div>
-                       <div>
-                          <Label className="text-[10px] uppercase text-muted-foreground">Amount</Label>
-                          <div className="h-7 flex items-center justify-end px-2 font-bold text-xs bg-slate-100 rounded border text-slate-700">
-                             {watch(`items.${index}.amount`)?.toFixed(2)}
-                          </div>
-                       </div>
+                      <div>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Qty</Label>
+                        <Input
+                          type="number"
+                          step="any"
+                          {...register(`items.${index}.qty`, { valueAsNumber: true })}
+                          className="h-7 text-xs bg-white"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Weight</Label>
+                        <Input
+                          type="number"
+                          step="any"
+                          {...register(`items.${index}.weight`, { valueAsNumber: true })}
+                          className="h-7 text-xs bg-white"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Rate</Label>
+                        <Input
+                          type="number"
+                          step="any"
+                          {...register(`items.${index}.rate`, { valueAsNumber: true })}
+                          className="h-7 text-xs bg-white"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Amount</Label>
+                        <div className="h-7 flex items-center justify-end px-2 font-bold text-xs bg-slate-100 rounded border text-slate-700">
+                          {watch(`items.${index}.amount`)?.toFixed(2)}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
                 {fields.length === 0 && (
-                   <div className="text-center py-8 text-muted-foreground text-xs border-dashed border rounded-md bg-slate-50">
-                      No items added.
-                   </div>
+                  <div className="text-center py-8 text-muted-foreground text-xs border-dashed border rounded-md bg-slate-50">
+                    No items added.
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -278,18 +313,18 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
                   </Select>
                 </div>
                 <div className="col-span-2 grid grid-cols-3 gap-2 pt-2 border-t mt-2">
-                   <div>
-                      <Label className="text-[10px]">CGST %</Label>
-                      <Input className="h-7 text-xs" type="number" step="any" {...register("cgstRate", { valueAsNumber: true })} />
-                   </div>
-                   <div>
-                      <Label className="text-[10px]">SGST %</Label>
-                      <Input className="h-7 text-xs" type="number" step="any" {...register("sgstRate", { valueAsNumber: true })} />
-                   </div>
-                   <div>
-                      <Label className="text-[10px]">IGST %</Label>
-                      <Input className="h-7 text-xs" type="number" step="any" {...register("igstRate", { valueAsNumber: true })} />
-                   </div>
+                  <div>
+                    <Label className="text-[10px]">CGST %</Label>
+                    <Input className="h-7 text-xs" type="number" step="any" {...register("cgstRate", { valueAsNumber: true })} />
+                  </div>
+                  <div>
+                    <Label className="text-[10px]">SGST %</Label>
+                    <Input className="h-7 text-xs" type="number" step="any" {...register("sgstRate", { valueAsNumber: true })} />
+                  </div>
+                  <div>
+                    <Label className="text-[10px]">IGST %</Label>
+                    <Input className="h-7 text-xs" type="number" step="any" {...register("igstRate", { valueAsNumber: true })} />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -302,27 +337,27 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
               </CardHeader>
               <CardContent className="space-y-3 p-3">
                 {clients && clients.length > 0 && (
-                   <div className="mb-4">
-                      <Label className="text-xs mb-1 block">Load Saved Client</Label>
-                      <Select onValueChange={handleClientSelect} value={selectedClient}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Select a client..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clients.map(c => (
-                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                   </div>
+                  <div className="mb-4">
+                    <Label className="text-xs mb-1 block">Load Saved Client</Label>
+                    <Select onValueChange={handleClientSelect} value={selectedClient}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select a client..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
-              
+
                 <div>
                   <Label className="text-xs">Buyer Name</Label>
                   <div className="flex gap-2">
                     <Input {...register("buyerName")} className="h-8" />
                     <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={handleSaveClient} title="Save Client">
-                       <UserPlus className="h-4 w-4" />
+                      <UserPlus className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -417,7 +452,7 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="bank" className="space-y-4 mt-4">
             <Card>
               <CardHeader className="pb-2">

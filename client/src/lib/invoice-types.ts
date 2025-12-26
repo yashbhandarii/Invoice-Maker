@@ -22,7 +22,7 @@ export const clientSchema = z.object({
 export const invoiceSchema = z.object({
   id: z.string().optional(), // Internal ID for the app
   status: z.enum(["Paid", "Pending", "Overdue"]).default("Pending"),
-  
+
   // Seller Details
   sellerName: z.string().min(1, "Company Name is required"),
   sellerHindiName: z.string().optional(),
@@ -53,11 +53,11 @@ export const invoiceSchema = z.object({
   cgstRate: z.number().min(0).default(0),
   sgstRate: z.number().min(0).default(0),
   igstRate: z.number().min(0).default(0),
-  
+
   // Calculated fields (usually computed, but can be overridden if needed)
   // We will compute these on the fly in the component, but store manual overrides if we want. 
   // For now, let's just store the inputs.
-  
+
   advance: z.number().min(0).default(0),
 
   // Bank Details
@@ -74,34 +74,34 @@ export type ClientData = z.infer<typeof clientSchema>;
 export const defaultInvoice: InvoiceData = {
   status: "Pending",
   sellerName: "M/S. LALCHAND NEMICHAND BHANDARI",
-  sellerHindiName: "मे. लालचंद 네मिचंद भंडारी",
+  sellerHindiName: "मे. लालचंद नेमीचंद भंडारी",
   sellerSubtitle: "GENERAL MERCHANT & COMMISSION AGENT",
   sellerAddress: "A/p. Shrigonda, Tal. Shrigonda, Dist. Ahmednagar - 413 701",
   sellerPan: "AEOPB3732L",
   sellerGst: "27AEOPB3732L1ZC",
   sellerContact1: "Ashish : 9422228205",
   sellerContact2: "Dipak : 9422223745",
-  
+
   buyerName: "",
   buyerAddress: "",
   buyerThrough: "",
   buyerGst: "",
   buyerStateCode: "27",
-  
+
   invoiceNo: "2005",
   date: new Date().toISOString().split('T')[0],
   vehicleNo: "",
-  
+
   items: [
     { id: "1", hsnCode: "", description: "Example Item", qty: 1, weight: 22.00, rate: 22.00, amount: 484.00 }
   ],
-  
+
   discount: 0,
   cgstRate: 0,
   sgstRate: 0,
   igstRate: 0,
   advance: 0,
-  
+
   bankName: "Ahmednagar Merchant Co-Op. Bank Ltd.",
   bankAccountNo: "010001100000008",
   bankIfsc: "AMDN0000110",

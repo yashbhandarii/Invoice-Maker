@@ -88,7 +88,10 @@ export function useUpdateInvoice() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to update invoice");
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to update invoice");
+      }
       return res.json();
     },
     onSuccess: () => {

@@ -1,11 +1,11 @@
-import { pgTable, text, varchar, integer, real, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
-import { sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
 
 // Users table
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey().$defaultFn(() => nanoid()),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
 });
@@ -19,14 +19,14 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // Clients table
-export const clients = pgTable("clients", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const clients = sqliteTable("clients", {
+  id: text("id").primaryKey().$defaultFn(() => nanoid()),
   name: text("name").notNull(),
   address: text("address"),
   gst: text("gst"),
   stateCode: text("state_code"),
   transport: text("transport"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertClientSchema = createInsertSchema(clients).omit({
@@ -40,8 +40,8 @@ export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Client = typeof clients.$inferSelect;
 
 // Invoices table
-export const invoices = pgTable("invoices", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+export const invoices = sqliteTable("invoices", {
+  id: text("id").primaryKey().$defaultFn(() => nanoid()),
   invoiceNo: text("invoice_no").notNull().unique(),
   status: text("status").notNull().default("Pending"), // Paid, Pending, Overdue
   date: text("date").notNull(),
@@ -67,7 +67,7 @@ export const invoices = pgTable("invoices", {
   vehicleNo: text("vehicle_no"),
 
   // Line items stored as JSON
-  items: jsonb("items").notNull(),
+  items: text("items", { mode: "json" }).notNull(),
 
   // Totals
   discount: real("discount").default(0).notNull(),
@@ -82,14 +82,16 @@ export const invoices = pgTable("invoices", {
   bankIfsc: text("bank_ifsc"),
   bankBranch: text("bank_branch"),
 
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  items: z.any() // Allow array of objects for JSON column
 });
 
 export const selectInvoiceSchema = createSelectSchema(invoices);

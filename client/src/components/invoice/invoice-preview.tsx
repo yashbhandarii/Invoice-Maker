@@ -174,8 +174,8 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
                     <div className="col-span-4 py-1 px-2 text-left">{item.description}</div>
                     <div className="col-span-1 py-1 px-1">{item.qty}</div>
                     <div className="col-span-2 py-1 px-1">{item.weight?.toFixed(2)}</div>
-                    <div className="col-span-1 py-1 px-1">{item.rate.toFixed(2)}</div>
-                    <div className="col-span-2 py-1 px-2 font-bold text-right">{item.amount.toFixed(2)}</div>
+                    <div className="col-span-1 py-1 px-1">{(Number(item.rate) || 0).toFixed(2)}</div>
+                    <div className="col-span-2 py-1 px-2 font-bold text-right">{(Number(item.amount) || 0).toFixed(2)}</div>
                   </div>
                 ))}
               </div>

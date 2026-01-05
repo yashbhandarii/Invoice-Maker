@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, Printer, Save, UserPlus } from "lucide-react";
+import { Plus, Trash2, Printer, Save, UserPlus, Share2 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useStore } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
@@ -18,9 +18,10 @@ interface InvoiceFormProps {
   defaultValues: InvoiceData;
   onUpdate: (data: InvoiceData) => void;
   onPrint: () => void;
+  onShare?: () => void;
 }
 
-export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormProps) {
+export function InvoiceForm({ defaultValues, onUpdate, onPrint, onShare }: InvoiceFormProps) {
   const { toast } = useToast();
   const { data: clients = [] } = useClients();
   const addClientMutation = useAddClient();
@@ -175,6 +176,10 @@ export function InvoiceForm({ defaultValues, onUpdate, onPrint }: InvoiceFormPro
           <Button onClick={handleSaveInvoice} variant="outline" size="sm" className="h-8">
             <Save className="w-4 h-4 mr-2" />
             Save
+          </Button>
+          <Button onClick={onShare} variant="outline" size="sm" className="h-8 border-green-600 text-green-600 hover:bg-green-50">
+            <Share2 className="w-4 h-4 mr-2" />
+            Share
           </Button>
           <Button onClick={onPrint} variant="default" size="sm" className="bg-primary text-white hover:bg-primary/90 h-8">
             <Printer className="w-4 h-4 mr-2" />

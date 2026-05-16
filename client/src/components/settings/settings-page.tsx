@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { useSettings, useUpdateSettings, useAuditLogs, useUsers } from "@/lib/api";
+import { useSettings, useUpdateSettings, useAuditLogs } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 
 export function SettingsPage() {
-  const { user } = useAuth();
   const { data: settingsData, isLoading: loadingSettings } = useSettings();
   const updateSettings = useUpdateSettings();
   const { toast } = useToast();
@@ -65,7 +63,6 @@ export function SettingsPage() {
       <Tabs defaultValue="company" className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="company">Company Profile</TabsTrigger>
-          {user?.role === "admin" && <TabsTrigger value="users">User Management</TabsTrigger>}
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
 
@@ -83,7 +80,6 @@ export function SettingsPage() {
                   <Input 
                     value={companySettings.companyName} 
                     onChange={e => setCompanySettings({...companySettings, companyName: e.target.value})} 
-                    disabled={user?.role !== "admin"}
                   />
                 </div>
                 <div className="space-y-2">
@@ -92,7 +88,6 @@ export function SettingsPage() {
                     value={companySettings.invoicePrefix} 
                     onChange={e => setCompanySettings({...companySettings, invoicePrefix: e.target.value})} 
                     placeholder="e.g. LNB-"
-                    disabled={user?.role !== "admin"}
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
@@ -100,7 +95,6 @@ export function SettingsPage() {
                   <Input 
                     value={companySettings.address} 
                     onChange={e => setCompanySettings({...companySettings, address: e.target.value})} 
-                    disabled={user?.role !== "admin"}
                   />
                 </div>
                 <div className="space-y-2">
@@ -108,7 +102,6 @@ export function SettingsPage() {
                   <Input 
                     value={companySettings.gstin} 
                     onChange={e => setCompanySettings({...companySettings, gstin: e.target.value})} 
-                    disabled={user?.role !== "admin"}
                   />
                 </div>
                 <div className="space-y-2">
@@ -116,7 +109,6 @@ export function SettingsPage() {
                   <Input 
                     value={companySettings.pan} 
                     onChange={e => setCompanySettings({...companySettings, pan: e.target.value})} 
-                    disabled={user?.role !== "admin"}
                   />
                 </div>
               </div>
@@ -129,7 +121,6 @@ export function SettingsPage() {
                     <Input 
                       value={companySettings.bankName} 
                       onChange={e => setCompanySettings({...companySettings, bankName: e.target.value})} 
-                      disabled={user?.role !== "admin"}
                     />
                   </div>
                   <div className="space-y-2">
@@ -137,7 +128,6 @@ export function SettingsPage() {
                     <Input 
                       value={companySettings.accountNo} 
                       onChange={e => setCompanySettings({...companySettings, accountNo: e.target.value})} 
-                      disabled={user?.role !== "admin"}
                     />
                   </div>
                   <div className="space-y-2">
@@ -145,7 +135,6 @@ export function SettingsPage() {
                     <Input 
                       value={companySettings.ifsc} 
                       onChange={e => setCompanySettings({...companySettings, ifsc: e.target.value})} 
-                      disabled={user?.role !== "admin"}
                     />
                   </div>
                   <div className="space-y-2">
@@ -153,13 +142,11 @@ export function SettingsPage() {
                     <Input 
                       value={companySettings.branch} 
                       onChange={e => setCompanySettings({...companySettings, branch: e.target.value})} 
-                      disabled={user?.role !== "admin"}
                     />
                   </div>
                 </div>
               </div>
 
-              {user?.role === "admin" && (
                 <Button 
                   className="mt-6" 
                   onClick={handleSaveSettings}
@@ -167,25 +154,11 @@ export function SettingsPage() {
                 >
                   {updateSettings.isPending ? "Saving..." : "Save Settings"}
                 </Button>
-              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Users Tab */}
-        {user?.role === "admin" && (
-          <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>Manage employees who have access to this system.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <UsersList />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
+
 
         {/* Audit Logs Tab */}
         <TabsContent value="audit">
@@ -204,41 +177,7 @@ export function SettingsPage() {
   );
 }
 
-function UsersList() {
-  const { data: users, isLoading } = useUsers();
 
-  if (isLoading) return <div>Loading users...</div>;
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-md border">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-muted text-muted-foreground border-b">
-            <tr>
-              <th className="p-3 font-medium">Username</th>
-              <th className="p-3 font-medium">Role</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users?.map(u => (
-              <tr key={u.id} className="border-b last:border-0 hover:bg-muted/50">
-                <td className="p-3">{u.username}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${u.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-600'}`}>
-                    {u.role.toUpperCase()}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-sm text-muted-foreground italic">
-        Note: To register a new employee, ask them to use the registration page while the server is running.
-      </p>
-    </div>
-  );
-}
 
 function AuditLogsList() {
   const { data: logs, isLoading } = useAuditLogs();

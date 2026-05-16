@@ -7,8 +7,7 @@ import { HamaliCharges } from "@/components/hamali/hamali-charges";
 import { CustomerManagement } from "@/components/customers/customer-management";
 import { ProductCatalog } from "@/components/products/product-catalog";
 import { SettingsPage } from "@/components/settings/settings-page";
-import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
@@ -42,7 +41,6 @@ export default function InvoiceBuilder() {
   const [activeTab, setActiveTab] = useState("invoice");
   const [mobileView, setMobileView] = useState<"editor" | "preview">("editor");
   const { toast } = useToast();
-  const { user, logoutMutation } = useAuth();
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -225,14 +223,6 @@ export default function InvoiceBuilder() {
         </div>
 
         <div className="hidden md:flex items-center gap-4">
-          {user && (
-            <div className="text-sm font-medium text-slate-600">
-              Welcome, {user.username}
-            </div>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => logoutMutation.mutate()} className="text-slate-500 hover:text-red-600">
-            <LogOut className="h-4 w-4 mr-2" /> Logout
-          </Button>
         </div>
       </div>
 

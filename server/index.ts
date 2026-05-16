@@ -1,6 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupAuth } from "./auth";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeBackupSystem } from "./backup";
@@ -67,7 +66,6 @@ export async function setupApp() {
   if (setupPromise) return setupPromise;
 
   setupPromise = (async () => {
-    setupAuth(app);
     await registerRoutes(httpServer, app);
     
     // Only run backup system locally (not on Vercel — no local SQLite or writable FS)

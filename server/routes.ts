@@ -26,17 +26,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  // Protect all API routes except auth routes
-  app.use("/api", (req, res, next) => {
-    if (req.path === "/register" || req.path === "/login" || req.path === "/logout" || req.path === "/user") {
-      return next();
-    }
-    if (!req.isAuthenticated()) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-    next();
-  });
+  // Removed auth protection middleware
 
   // Client Routes
   app.get("/api/clients", async (req, res) => {
@@ -492,16 +482,7 @@ export async function registerRoutes(
 
           invoice = await storage.createInvoice(invoiceWithPayments as any);
           
-          if (req.user) {
-            await storage.createAuditLog({
-              userId: req.user.id,
-              username: req.user.username,
-              action: 'CREATE',
-              entityType: 'INVOICE',
-              entityId: invoice.id,
-              details: `Created invoice #${invoice.invoiceNo} for ${invoice.buyerName}`
-            });
-          }
+
           
           break; // Success
         } catch (e: any) {
@@ -577,16 +558,7 @@ export async function registerRoutes(
         return;
       }
 
-      if (req.user) {
-        await storage.createAuditLog({
-          userId: req.user.id,
-          username: req.user.username,
-          action: 'UPDATE',
-          entityType: 'INVOICE',
-          entityId: invoice.id,
-          details: `Updated invoice #${invoice.invoiceNo}`
-        });
-      }
+
 
       res.json(invoice);
     } catch (error) {
@@ -602,16 +574,7 @@ export async function registerRoutes(
   app.delete("/api/invoices/:id", async (req, res) => {
     try {
       const invoice = await storage.getInvoice(req.params.id);
-      if (invoice && req.user) {
-        await storage.createAuditLog({
-          userId: req.user.id,
-          username: req.user.username,
-          action: 'DELETE',
-          entityType: 'INVOICE',
-          entityId: invoice.id,
-          details: `Deleted invoice #${invoice.invoiceNo}`
-        });
-      }
+
 
       await storage.deleteInvoice(req.params.id);
       res.status(204).send();
@@ -1209,25 +1172,7 @@ export async function registerRoutes(
     }
   });
 
-  // User Management
-  app.get("/api/users", async (req, res) => {
-    try {
-      if (req.user?.role !== "admin") {
-        return res.status(403).json({ error: "Only admins can view users" });
-      }
-      const { db } = await import("./db");
-      const { users } = await import("@shared/schema");
-      const allUsers = await db.select({
-        id: users.id,
-        username: users.username,
-        role: users.role
-      }).from(users);
-      res.json(allUsers);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      res.status(500).json({ error: "Failed to fetch users" });
-    }
-  });
+
 
   return httpServer;
 }

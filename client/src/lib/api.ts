@@ -206,17 +206,7 @@ export function useAuditLogs() {
   });
 }
 
-// Users API
-export function useUsers() {
-  return useQuery({
-    queryKey: ["users"],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE}/users`);
-      if (!res.ok) throw new Error("Failed to fetch users");
-      return res.json() as Promise<any[]>;
-    },
-  });
-}
+
 
 // Hamali API
 

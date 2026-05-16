@@ -1,0 +1,3 @@
+﻿client/src/components/delivery/delivery-challan.tsx(142,87): error TS18048: 'data.clientName' is possibly 'undefined'.
+client/src/components/invoice/invoice-form.tsx(3,54): error TS2300: Duplicate identifier 'ClientData'.
+client/src/components/invoice/invoice-form.tsx(17,10): error TS2300: Duplicate identifier 'ClientData'.

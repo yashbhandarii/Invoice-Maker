@@ -25,7 +25,8 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
     const sgstAmount = (taxableAmount * sgstRate) / 100;
     const igstAmount = (taxableAmount * igstRate) / 100;
 
-    const grandTotal = taxableAmount + cgstAmount + sgstAmount + igstAmount;
+    const otherCharges = Number(data.otherCharges) || 0;
+    const grandTotal = taxableAmount + cgstAmount + sgstAmount + igstAmount + otherCharges;
     const totalBalance = grandTotal - advance;
 
     return (
@@ -44,7 +45,7 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
         </style>
         <div
           ref={ref}
-          className="bg-white w-[210mm] h-[297mm] p-4 md:p-8 shadow-xl text-black font-serif relative print:shadow-none print:w-[210mm] print:h-[297mm] print:p-4 overflow-hidden flex flex-col"
+          className="bg-white w-[210mm] h-[297mm] p-4 md:p-8 shadow-xl text-black font-serif relative print:shadow-none print:w-[210mm] print:h-[297mm] print:p-4 overflow-hidden flex flex-col transform scale-[0.45] sm:scale-75 md:scale-100 origin-top mb-[-140mm] sm:mb-[-70mm] md:mb-0"
           style={{ fontSize: '14px' }}
         >
           {/* Main Border Container */}
@@ -104,7 +105,7 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
                   <span className="border-b border-dotted border-gray-400 flex-1">{data.buyerAddress}</span>
                 </div>
                 <div className="flex">
-                  <span className="font-bold w-24 text-primary">By / Through :</span>
+                  <span className="font-bold w-24 text-primary">By / Through:</span>
                   <span className="border-b border-dotted border-gray-400 flex-1">{data.buyerThrough}</span>
                 </div>
                 <div className="flex justify-between">
@@ -113,7 +114,7 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
                     <span className="border-b border-dotted border-gray-400 flex-1">{data.buyerGst}</span>
                   </div>
                   <div className="flex flex-1">
-                    <span className="font-bold w-24 text-primary">State Code :</span>
+                    <span className="font-bold w-24 text-primary">State :</span>
                     <span className="border-b border-dotted border-gray-400 flex-1">{data.buyerStateCode}</span>
                   </div>
                 </div>
@@ -187,16 +188,14 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
               {/* Left Side: Amount in Words */}
               <div className="col-span-7 p-2 border-r-2 border-primary flex flex-col">
                 <div className="text-primary font-bold mb-1">Rupees in words :</div>
-                <div className="font-serif italic text-lg leading-relaxed border-b border-gray-300 pb-1">
-                  {numberToWords(grandTotal)}
-                </div>
+                {numberToWords(Math.round(totalBalance))}
               </div>
 
               {/* Right Side: Totals Calculation */}
               <div className="col-span-5">
                 {discountAmount > 0 && (
                   <div className="grid grid-cols-2 border-b border-primary">
-                    <div className="p-1 pl-2 text-primary">Discount</div>
+                    <div className="p-1 pl-2 text-primary">{data.discountLabel || "Discount"}</div>
                     <div className="p-1 pr-2 text-right border-l border-primary">{discountAmount.toFixed(2)}</div>
                   </div>
                 )}
@@ -231,13 +230,19 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
                     </div>
                   </div>
                 )}
+                {otherCharges > 0 && (
+                  <div className="grid grid-cols-2 border-b border-primary">
+                    <div className="p-1 pl-2 text-primary">{data.otherChargesLabel || "Freight / Labour"}</div>
+                    <div className="p-1 pr-2 text-right border-l border-primary">{otherCharges.toFixed(2)}</div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 border-b border-primary bg-[#fffdf0]">
                   <div className="p-1 pl-2 text-primary font-bold">GRAND TOTAL</div>
                   <div className="p-1 pr-2 text-right border-l border-primary font-bold text-lg">{grandTotal.toFixed(2)}</div>
                 </div>
                 {data.advance > 0 && (
                   <div className="grid grid-cols-2 border-b border-primary">
-                    <div className="p-1 pl-2 text-primary">ADVANCE</div>
+                    <div className="p-1 pl-2 text-primary">{data.advanceLabel || "Advance"}</div>
                     <div className="p-1 pr-2 text-right border-l border-primary">{data.advance.toFixed(2)}</div>
                   </div>
                 )}
@@ -255,10 +260,10 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
               <div className="flex justify-between items-end">
                 <div className="text-xs font-bold space-y-1">
                   <h3 className="text-primary font-bold uppercase text-xs mb-1">Bank Details</h3>
-                  <div className="flex"><span className="w-20 text-primary">Bank Name</span> <span>: {data.bankName}</span></div>
-                  <div className="flex"><span className="w-20 text-primary">Bank A/c No.</span> <span>: {data.bankAccountNo}</span></div>
-                  <div className="flex"><span className="w-20 text-primary">IFSC Code No.</span> <span>: {data.bankIfsc}</span></div>
-                  <div className="flex"><span className="w-20 text-primary">Branch</span> <span>: {data.bankBranch}</span></div>
+                  <div className="flex"><span className="w-22 text-primary">Bank Name</span> <span>: {data.bankName}</span></div>
+                  <div className="flex"><span className="w-22 text-primary">Bank A/c No.</span> <span>: {data.bankAccountNo}</span></div>
+                  <div className="flex"><span className="w-22 text-primary">IFSC Code No.</span> <span>: {data.bankIfsc}</span></div>
+                  <div className="flex"><span className="w-22 text-primary">Branch</span> <span>: {data.bankBranch}</span></div>
                 </div>
 
                 <div className="text-center">
@@ -271,7 +276,7 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
 
           </div>
         </div>
-      </div>
+      </div >
     );
   }
 );

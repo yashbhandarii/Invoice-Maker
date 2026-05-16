@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Users, CreditCard, Calendar, FileText, CheckCircle2, AlertCircle, Scale, Trash2, Edit } from "lucide-react";
+import { ArrowUpRight, Users, CreditCard, Calendar, FileText, CheckCircle2, AlertCircle, Scale, Trash2, Edit, Copy } from "lucide-react";
 import reportImage from "@assets/generated_images/professional_invoice_dashboard_report_with_charts_and_table.png";
 import {
   AlertDialog,
@@ -22,8 +22,25 @@ import { InvoiceData } from "@/lib/invoice-types";
 import { useInvoices, useDeleteInvoice } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search } from "lucide-react";
+
 export function InvoiceDashboard() {
-  const { data: invoices = [], isLoading } = useInvoices();
+  const [filters, setFilters] = useState({
+    search: "",
+    status: "all",
+    fromDate: "",
+    toDate: "",
+    financialYear: "all",
+  });
+
+  const { data: invoices = [], isLoading } = useInvoices(filters);
 
   const { setCurrentInvoice, resetCurrentInvoice } = useStore();
   const deleteMutation = useDeleteInvoice();
@@ -41,9 +58,9 @@ export function InvoiceDashboard() {
   };
 
   const handleConfirmDelete = () => {
-    if (password === "112233") {
+    if (password) {
       if (deleteId) {
-        deleteMutation.mutate(deleteId, {
+        deleteMutation.mutate({ id: deleteId, password }, {
           onSuccess: () => {
             toast({
               title: "Invoice Deleted",
@@ -51,10 +68,10 @@ export function InvoiceDashboard() {
             });
             setIsDeleteDialogOpen(false);
           },
-          onError: () => {
+          onError: (error: any) => {
             toast({
               title: "Error",
-              description: "Failed to delete invoice.",
+              description: error.message || "Failed to delete invoice.",
               variant: "destructive"
             });
           }
@@ -63,15 +80,29 @@ export function InvoiceDashboard() {
     } else {
       toast({
         title: "Access Denied",
-        description: "Incorrect password.",
+        description: "Password is required.",
         variant: "destructive"
       });
     }
   };
-
   const handleEditClick = (e: React.MouseEvent, inv: InvoiceData) => {
     e.stopPropagation();
     setCurrentInvoice(inv);
+    window.document.getElementById('tab-invoice')?.click();
+  };
+
+  const handleCloneClick = (e: React.MouseEvent, inv: InvoiceData) => {
+    e.stopPropagation();
+    const clonedInvoice = { ...inv };
+    delete clonedInvoice.id;
+    clonedInvoice.invoiceNo = ""; // Backend will suggest next
+    clonedInvoice.date = new Date().toISOString().split('T')[0];
+    clonedInvoice.status = "Pending";
+    delete (clonedInvoice as any).createdAt;
+    delete (clonedInvoice as any).updatedAt;
+    delete (clonedInvoice as any).financialYear;
+    
+    setCurrentInvoice(clonedInvoice);
     window.document.getElementById('tab-invoice')?.click();
   };
 
@@ -91,9 +122,11 @@ export function InvoiceDashboard() {
       .filter(inv => inv.status === "Pending" || inv.status === "Overdue")
       .reduce((acc, inv) => {
         const subTotal = inv.items.reduce((s, i) => s + i.amount, 0);
-        const taxable = subTotal - (inv.discount || 0);
-        const taxes = taxable * ((inv.cgstRate || 0) + (inv.sgstRate || 0) + (inv.igstRate || 0)) / 100;
-        return acc + (taxable + taxes - (inv.advance || 0));
+        const taxable = subTotal - (Number(inv.discount) || 0);
+        const taxes = taxable * ((Number(inv.cgstRate) || 0) + (Number(inv.sgstRate) || 0) + (Number(inv.igstRate) || 0)) / 100;
+        const grandTotal = taxable + taxes + (Number(inv.otherCharges) || 0);
+        const remaining = (inv as any).remainingAmount ?? (grandTotal - ((Number((inv as any).paidAmount)) || Number(inv.advance) || 0));
+        return acc + remaining;
       }, 0);
 
     const paidCount = invoices.filter(inv => inv.status === "Paid").length;
@@ -112,9 +145,9 @@ export function InvoiceDashboard() {
 
   const getInvoiceTotal = (inv: InvoiceData) => {
     const subTotal = inv.items.reduce((s, i) => s + i.amount, 0);
-    const taxable = subTotal - (inv.discount || 0);
-    const taxes = taxable * ((inv.cgstRate || 0) + (inv.sgstRate || 0) + (inv.igstRate || 0)) / 100;
-    return taxable + taxes;
+    const taxable = subTotal - (Number(inv.discount) || 0);
+    const taxes = taxable * ((Number(inv.cgstRate) || 0) + (Number(inv.sgstRate) || 0) + (Number(inv.igstRate) || 0)) / 100;
+    return taxable + taxes + (Number(inv.otherCharges) || 0);
   };
 
   return (
@@ -209,9 +242,58 @@ export function InvoiceDashboard() {
         </Card>
 
         {/* Recent Invoices List */}
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Recent Invoices</CardTitle>
+        <Card className="col-span-full border shadow-sm mt-6">
+          <CardHeader className="bg-slate-50 border-b pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <CardTitle className="text-lg font-bold text-slate-800">Invoices</CardTitle>
+            
+            {/* Filters */}
+            <div className="flex flex-col md:flex-row gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                <Input
+                  placeholder="Search invoices..."
+                  className="pl-9 w-full md:w-64"
+                  value={filters.search}
+                  onChange={(e) => setFilters(f => ({ ...f, search: e.target.value }))}
+                />
+              </div>
+              <Select value={filters.status} onValueChange={(val) => setFilters(f => ({ ...f, status: val }))}>
+                <SelectTrigger className="w-full md:w-36">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="Paid">Paid</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="Overdue">Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filters.financialYear} onValueChange={(val) => setFilters(f => ({ ...f, financialYear: val }))}>
+                <SelectTrigger className="w-full md:w-36">
+                  <SelectValue placeholder="Financial Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  <SelectItem value="25-26">2025-26</SelectItem>
+                  <SelectItem value="26-27">2026-27</SelectItem>
+                  <SelectItem value="24-25">2024-25</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                className="w-full md:w-40"
+                value={filters.fromDate}
+                onChange={(e) => setFilters(f => ({ ...f, fromDate: e.target.value }))}
+                title="From Date"
+              />
+              <Input
+                type="date"
+                className="w-full md:w-40"
+                value={filters.toDate}
+                onChange={(e) => setFilters(f => ({ ...f, toDate: e.target.value }))}
+                title="To Date"
+              />
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y max-h-[400px] overflow-auto">
@@ -250,10 +332,13 @@ export function InvoiceDashboard() {
                             {inv.status}
                           </Badge>
                           <div className="flex gap-1 ml-2">
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500 hover:text-blue-700 hover:bg-blue-50" onClick={(e) => handleEditClick(e, inv)}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500 hover:text-blue-700 hover:bg-blue-50" onClick={(e) => handleEditClick(e, inv)} title="Edit">
                               <Edit className="h-3 w-3" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={(e) => handleDeleteClick(e, inv.id!)}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-green-500 hover:text-green-700 hover:bg-green-50" onClick={(e) => handleCloneClick(e, inv)} title="Clone">
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={(e) => handleDeleteClick(e, inv.id!)} title="Delete">
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>

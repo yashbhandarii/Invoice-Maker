@@ -1,7 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { setupAuth } from "./auth";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { initializeBackupSystem } from "./backup";
 
 const app = express();
 const httpServer = createServer(app);
@@ -65,7 +67,9 @@ export async function setupApp() {
   if (setupPromise) return setupPromise;
 
   setupPromise = (async () => {
+    setupAuth(app);
     await registerRoutes(httpServer, app);
+    initializeBackupSystem();
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

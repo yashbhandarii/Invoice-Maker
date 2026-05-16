@@ -7,8 +7,8 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser, users } from "@shared/schema";
 import { db } from "./db";
-
-import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
+import pg from "pg";
 
 declare global {
   namespace Express {
@@ -32,16 +32,26 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
-  const MemoryStore = createMemoryStore(session);
+  const PgStore = connectPgSimple(session);
+  
+  const connectionString = process.env.DATABASE_URL || "postgresql://postgres.mylmgifbvtcviwgflydf:EGssG4bJ%23%26664zJ@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres";
+  
+  const pgPool = new pg.Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+  });
+
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.REPL_ID || "invoce-super-secret-key-123",
+    secret: process.env.SESSION_SECRET || "invoce-super-secret-key-123",
     resave: false,
     saveUninitialized: false,
-    store: new MemoryStore({
-      checkPeriod: 86400000,
+    store: new PgStore({
+      pool: pgPool,
+      createTableIfMissing: true,
+      tableName: "session",
     }),
     cookie: {
-      maxAge: 86400000,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
     },

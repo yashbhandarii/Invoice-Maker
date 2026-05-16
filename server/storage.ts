@@ -363,7 +363,7 @@ export class PostgresStorage implements IStorage {
     referenceId?: string
   ): Promise<Product | undefined> {
     return await db.transaction(async (tx) => {
-      const product = await tx.select().from(products).where(eq(products.id, productId)).get();
+      const [product] = await tx.select().from(products).where(eq(products.id, productId));
       if (!product || !product.trackInventory) {
         return undefined;
       }

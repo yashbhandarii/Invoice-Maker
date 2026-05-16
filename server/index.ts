@@ -3,6 +3,8 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeBackupSystem } from "./backup";
+import { initializeDatabase } from "./init-db";
+import { seedDatabase } from "./seed-db";
 
 const app = express();
 const httpServer = createServer(app);
@@ -66,6 +68,10 @@ export async function setupApp() {
   if (setupPromise) return setupPromise;
 
   setupPromise = (async () => {
+    // Initialize database first
+    await initializeDatabase();
+    await seedDatabase();
+    
     await registerRoutes(httpServer, app);
     
     // Only run backup system locally (not on Vercel — no local SQLite or writable FS)

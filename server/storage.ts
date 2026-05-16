@@ -320,7 +320,7 @@ export class PostgresStorage implements IStorage {
 
   // Product methods
   async getProducts(): Promise<Product[]> {
-    return await db.select().from(products).where(eq(products.isActive, true)).orderBy(products.name);
+    return await db.select().from(products).where(eq(products.isActive, 1)).orderBy(products.name);
   }
 
   async getProduct(id: string): Promise<Product | undefined> {
@@ -349,7 +349,7 @@ export class PostgresStorage implements IStorage {
 
   async searchProducts(query: string): Promise<Product[]> {
     // Simple search by name (case-insensitive)
-    const allProducts = await db.select().from(products).where(eq(products.isActive, true));
+    const allProducts = await db.select().from(products).where(eq(products.isActive, 1));
     return allProducts.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
   }
 
@@ -407,7 +407,7 @@ export class PostgresStorage implements IStorage {
   }
 
   async getLowStockProducts(): Promise<Product[]> {
-    const allProducts = await db.select().from(products).where(eq(products.isActive, true));
+    const allProducts = await db.select().from(products).where(eq(products.isActive, 1));
     return allProducts.filter(p =>
       p.trackInventory &&
       (p.currentStock || 0) <= (p.minStockLevel || 0)

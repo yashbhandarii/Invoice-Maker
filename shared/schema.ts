@@ -1,4 +1,7 @@
-import { pgTable as sqliteTable, text, integer, doublePrecision as real, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+
+// SQLite uses integer(0/1) for boolean
+const boolean = (name: string) => integer(name);
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 import { nanoid } from "nanoid";
@@ -30,7 +33,7 @@ export const clients = sqliteTable("clients", {
   transport: text("transport"),
   email: text("email"),
   mobile: text("mobile"),
-  createdAt: timestamp("created_at").$defaultFn(() => new Date()).notNull(),
+  createdAt: integer("created_at").$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertClientSchema = createInsertSchema(clients).omit({
@@ -49,7 +52,7 @@ export const transporters = sqliteTable("transporters", {
   name: text("name").notNull(),
   vehicleNo: text("vehicle_no"),
   mobile: text("mobile"),
-  createdAt: timestamp("created_at").$defaultFn(() => new Date()).notNull(),
+  createdAt: integer("created_at").$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertTransporterSchema = createInsertSchema(transporters).omit({
@@ -90,7 +93,7 @@ export const invoices = sqliteTable("invoices", {
   vehicleNo: text("vehicle_no"),
 
   // Line items stored as JSON
-  items: jsonb("items").notNull(),
+  items: text("items").notNull(),
 
   // Totals
   discount: real("discount").default(0).notNull(),
@@ -101,7 +104,7 @@ export const invoices = sqliteTable("invoices", {
   otherCharges: real("other_charges").default(0),
 
   // Payment tracking
-  payments: jsonb("payments").$defaultFn(() => []),
+  payments: text("payments").$defaultFn(() => []),
   paidAmount: real("paid_amount").default(0),
   remainingAmount: real("remaining_amount").default(0),
 
@@ -116,8 +119,8 @@ export const invoices = sqliteTable("invoices", {
   advanceLabel: text("advance_label").default("Advance"),
   otherChargesLabel: text("other_charges_label").default("Other Charges"),
 
-  createdAt: timestamp("created_at").$defaultFn(() => new Date()).notNull(),
-  updatedAt: timestamp("updated_at").$defaultFn(() => new Date()).notNull(),
+  createdAt: integer("created_at").$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updated_at").$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
@@ -153,9 +156,9 @@ export const hamaliDailyRecords = sqliteTable("hamali_daily_records", {
   id: text("id").primaryKey().$defaultFn(() => nanoid()),
   date: text("date").notNull(), // stored as ISO string or YYYY-MM-DD
   totalAmount: real("total_amount").notNull(),
-  items: jsonb("items").notNull(), // JSON array of items { categoryName, rate, bags, total }
+  items: text("items").notNull(), // JSON array of items { categoryName, rate, bags, total }
   comment: text("comment"),
-  createdAt: timestamp("created_at").$defaultFn(() => new Date()).notNull(),
+  createdAt: integer("created_at").$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertHamaliDailyRecordSchema = createInsertSchema(hamaliDailyRecords).omit({
@@ -191,7 +194,7 @@ export const deliveryChallans = sqliteTable("delivery_challans", {
   vehicleNo: text("vehicle_no"),
 
   // Items stored as JSON
-  items: jsonb("items").notNull(),
+  items: text("items").notNull(),
 
   // Totals
   totalFreightSum: real("total_freight_sum").default(0),
@@ -207,9 +210,9 @@ export const deliveryChallans = sqliteTable("delivery_challans", {
   hideFreight: boolean("hide_freight").default(false),
 
   // Payments stored as JSON: { date, amount, note }[]
-  payments: jsonb("payments").$defaultFn(() => []),
+  payments: text("payments").$defaultFn(() => []),
 
-  createdAt: timestamp("created_at").$defaultFn(() => new Date()).notNull(),
+  createdAt: integer("created_at").$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertDeliveryChallanSchema = createInsertSchema(deliveryChallans).omit({
@@ -242,8 +245,8 @@ export const products = sqliteTable("products", {
   minStockLevel: real("min_stock_level").default(0),
   maxStockLevel: real("max_stock_level"),
 
-  createdAt: timestamp("created_at").$defaultFn(() => new Date()).notNull(),
-  updatedAt: timestamp("updated_at").$defaultFn(() => new Date()).notNull(),
+  createdAt: integer("created_at").$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updated_at").$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({
@@ -268,7 +271,7 @@ export const inventoryTransactions = sqliteTable("inventory_transactions", {
   referenceType: text("reference_type"), // "invoice", "manual", etc.
   referenceId: text("reference_id"), // Invoice ID, etc.
   notes: text("notes"),
-  createdAt: timestamp("created_at").$defaultFn(() => new Date()).notNull(),
+  createdAt: integer("created_at").$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertInventoryTransactionSchema = createInsertSchema(inventoryTransactions).omit({
@@ -301,7 +304,7 @@ export const auditLogs = sqliteTable("audit_logs", {
   entityType: text("entity_type").notNull(), // INVOICE, CLIENT, etc.
   entityId: text("entity_id").notNull(),
   details: text("details"), // JSON string of changes
-  createdAt: timestamp("created_at").$defaultFn(() => new Date()).notNull(),
+  createdAt: integer("created_at").$defaultFn(() => new Date()).notNull(),
 });
 
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({

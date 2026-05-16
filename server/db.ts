@@ -1,14 +1,18 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import * as schema from "@shared/schema";
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import Database from 'better-sqlite3';
+import * as schema from "@shared/sqlite-schema";
 import * as dotenv from "dotenv";
+import path from 'path';
 
 dotenv.config();
 
-const connectionString = process.env.DATABASE_URL || "postgresql://postgres.mylmgifbvtcviwgflydf:EGssG4bJ%23%26664zJ@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres";
+const dbPath = path.join(process.cwd(), 'sqlite.db');
+const sqlite = new Database(dbPath);
 
-// Disable prefetch as it is not supported for "Transaction" pool mode
-const client = postgres(connectionString, { prepare: false });
-export const db = drizzle(client, { schema });
+// Enable foreign keys
+sqlite.pragma('foreign_keys = ON');
+
+// Initialize database schema if needed
+export const db = drizzle(sqlite, { schema });
 
 

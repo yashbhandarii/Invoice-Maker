@@ -34,11 +34,22 @@ async function comparePasswords(supplied: string, stored: string) {
 export function setupAuth(app: Express) {
   const PgStore = connectPgSimple(session);
   
-  const connectionString = process.env.DATABASE_URL || "postgresql://postgres.mylmgifbvtcviwgflydf:EGssG4bJ%23%26664zJ@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres";
+  // Use the session/direct connection for pg Pool (port 5432 supports prepared statements)
+  // The transaction pooler (port 6543) does NOT support prepared statements which connect-pg-simple needs
+  const directConnectionString = process.env.DATABASE_URL_DIRECT 
+    || "postgresql://postgres.mylmgifbvtcviwgflydf:EGssG4bJ%23%26664zJ@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres";
   
   const pgPool = new pg.Pool({
-    connectionString,
+    connectionString: directConnectionString,
     ssl: { rejectUnauthorized: false },
+    max: 3,
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 10000,
+  });
+
+  // Log pool errors instead of crashing
+  pgPool.on('error', (err) => {
+    console.error('Session pool error:', err.message);
   });
 
   const sessionSettings: session.SessionOptions = {
@@ -49,11 +60,13 @@ export function setupAuth(app: Express) {
       pool: pgPool,
       createTableIfMissing: true,
       tableName: "session",
+      pruneSessionInterval: 60 * 15, // 15 min
     }),
     cookie: {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      httpOnly: true,
     },
   };
 
@@ -115,8 +128,15 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) return res.status(401).json({ message: info?.message || "Invalid credentials" });
+      req.login(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
+        res.status(200).json(user);
+      });
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {

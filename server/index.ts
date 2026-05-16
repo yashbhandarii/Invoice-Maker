@@ -69,7 +69,11 @@ export async function setupApp() {
   setupPromise = (async () => {
     setupAuth(app);
     await registerRoutes(httpServer, app);
-    initializeBackupSystem();
+    
+    // Only run backup system locally (not on Vercel — no local SQLite or writable FS)
+    if (!process.env.VERCEL) {
+      initializeBackupSystem();
+    }
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

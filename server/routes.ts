@@ -1146,10 +1146,6 @@ export async function registerRoutes(
 
   app.post("/api/settings", async (req, res) => {
     try {
-      if (req.user?.role !== "admin") {
-        return res.status(403).json({ error: "Only admins can update settings" });
-      }
-      
       const updates = req.body; // Expecting { key: "value", key2: "value2" }
       for (const [key, value] of Object.entries(updates)) {
         await storage.setSetting(key, String(value));

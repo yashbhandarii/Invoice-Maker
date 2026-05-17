@@ -1,4 +1,4 @@
-import app, { setupApp } from "../server/index";
+import app, { setupApp } from "../dist/index.cjs";
 
 export default async (req: any, res: any) => {
     try {

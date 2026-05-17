@@ -1,24 +1,29 @@
 import * as bundledServer from "../dist/index.cjs";
 
 type RequestHandler = (req: any, res: any) => void;
+type BundledServerModule = {
+    default?: unknown;
+    setupApp?: unknown;
+};
 
 function resolveServerExports() {
+    const bundled = bundledServer as BundledServerModule;
     const moduleDefault =
-        bundledServer.default &&
-        typeof bundledServer.default === "object"
-            ? (bundledServer.default as Record<string, unknown>)
+        bundled.default &&
+        typeof bundled.default === "object"
+            ? (bundled.default as Record<string, unknown>)
             : null;
 
     const app =
         typeof moduleDefault?.default === "function"
             ? (moduleDefault.default as RequestHandler)
-            : typeof bundledServer.default === "function"
-              ? (bundledServer.default as unknown as RequestHandler)
+            : typeof bundled.default === "function"
+              ? (bundled.default as RequestHandler)
               : null;
 
     const setupApp =
-        typeof bundledServer.setupApp === "function"
-            ? bundledServer.setupApp
+        typeof bundled.setupApp === "function"
+            ? (bundled.setupApp as () => Promise<void>)
             : typeof moduleDefault?.setupApp === "function"
               ? (moduleDefault.setupApp as () => Promise<void>)
               : null;

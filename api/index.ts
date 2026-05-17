@@ -1,4 +1,4 @@
-import * as bundledServer from "../dist/index.cjs";
+import { createRequire } from "node:module";
 
 type RequestHandler = (req: any, res: any) => void;
 type BundledServerModule = {
@@ -7,7 +7,8 @@ type BundledServerModule = {
 };
 
 function resolveServerExports() {
-    const bundled = bundledServer as BundledServerModule;
+    const require = createRequire(import.meta.url);
+    const bundled = require("../dist/index.cjs") as BundledServerModule;
     const moduleDefault =
         bundled.default &&
         typeof bundled.default === "object"

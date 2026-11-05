@@ -11,6 +11,13 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={InvoiceBuilder} />
+      <Route path="/settings" component={InvoiceBuilder} />
+      <Route path="/dashboard" component={InvoiceBuilder} />
+      <Route path="/invoice" component={InvoiceBuilder} />
+      <Route path="/delivery" component={InvoiceBuilder} />
+      <Route path="/hamali" component={InvoiceBuilder} />
+      <Route path="/customers" component={InvoiceBuilder} />
+      <Route path="/products" component={InvoiceBuilder} />
       <Route component={NotFound} />
     </Switch>
   );

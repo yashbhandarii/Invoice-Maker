@@ -162,6 +162,24 @@ export default function InvoiceBuilder() {
     return () => window.removeEventListener("open-invoice-history", handler);
   }, []);
 
+  // Sync active tab with URL path or query params
+  useEffect(() => {
+    const path = window.location.pathname.replace(/^\//, "").toLowerCase();
+    const searchParams = new URLSearchParams(window.location.search);
+    const tabParam = searchParams.get("tab")?.toLowerCase();
+
+    if (
+      path === "settings" ||
+      tabParam === "settings" ||
+      searchParams.has("drive_connected") ||
+      searchParams.has("drive_error")
+    ) {
+      setActiveTab("settings");
+    } else if (path && ["dashboard", "invoice", "delivery", "hamali", "customers", "products"].includes(path)) {
+      setActiveTab(path);
+    }
+  }, []);
+
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },

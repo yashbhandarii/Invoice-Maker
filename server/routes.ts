@@ -1415,11 +1415,11 @@ export async function registerRoutes(
       const stateRaw = req.query.state as string;
 
       if (error) {
-        return res.redirect(`/settings?drive_error=${encodeURIComponent("Google authorization denied: " + error)}`);
+        return res.redirect(`/?tab=settings&drive_error=${encodeURIComponent("Google authorization denied: " + error)}`);
       }
 
       if (!code) {
-        return res.redirect(`/settings?drive_error=${encodeURIComponent("No authorization code received from Google.")}`);
+        return res.redirect(`/?tab=settings&drive_error=${encodeURIComponent("No authorization code received from Google.")}`);
       }
 
       let stateData: any = {};
@@ -1437,7 +1437,7 @@ export async function registerRoutes(
       const redirectUri = stateData.redirectUri || `${protocol}://${host}/api/google-drive/oauth-callback`;
 
       if (!clientId || !clientSecret) {
-        return res.redirect(`/settings?drive_error=${encodeURIComponent("OAuth credentials missing.")}`);
+        return res.redirect(`/?tab=settings&drive_error=${encodeURIComponent("OAuth credentials missing.")}`);
       }
 
       const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
@@ -1455,7 +1455,7 @@ export async function registerRoutes(
       if (!tokenRes.ok) {
         const errText = await tokenRes.text();
         console.error("Token exchange failed:", errText);
-        return res.redirect(`/settings?drive_error=${encodeURIComponent("Token exchange failed: " + errText)}`);
+        return res.redirect(`/?tab=settings&drive_error=${encodeURIComponent("Token exchange failed: " + errText)}`);
       }
 
       const tokenData = await tokenRes.json();
@@ -1486,10 +1486,10 @@ export async function registerRoutes(
         await storage.setSetting("googleDrive_userEmail", userEmail);
       }
 
-      res.redirect(`/settings?drive_connected=true&email=${encodeURIComponent(userEmail || "Google User")}`);
+      res.redirect(`/?tab=settings&drive_connected=true&email=${encodeURIComponent(userEmail || "Google User")}`);
     } catch (error: any) {
       console.error("Google OAuth callback error:", error);
-      res.redirect(`/settings?drive_error=${encodeURIComponent(error.message || "Failed to complete Google Drive connection.")}`);
+      res.redirect(`/?tab=settings&drive_error=${encodeURIComponent(error.message || "Failed to complete Google Drive connection.")}`);
     }
   });
 

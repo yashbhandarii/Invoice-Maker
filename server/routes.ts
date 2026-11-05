@@ -7,6 +7,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { listBackups, createBackup } from "./backup";
+import { getGoogleDriveConfig, uploadPdfToDrive, testGoogleDriveConnection } from "./google-drive";
 
 function getFinancialYear(dateInput: Date | string = new Date()): string {
   const date = new Date(dateInput);
@@ -1287,8 +1288,10 @@ export async function registerRoutes(
         return;
       }
 
-      // Create folder if it doesn't exist
-      const uploadDir = path.join(process.cwd(), "uploads", "pdfs");
+      // Create folder if it doesn't exist (use /tmp on Vercel as filesystem is read-only)
+      const uploadDir = process.env.VERCEL
+        ? path.join("/tmp", "uploads", "pdfs")
+        : path.join(process.cwd(), "uploads", "pdfs");
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }
@@ -1314,7 +1317,10 @@ export async function registerRoutes(
     try {
       const { filename } = req.params;
       const safeFilename = filename.replace(/\.\./g, ""); // Prevent path traversal
-      const filePath = path.join(process.cwd(), "uploads", "pdfs", safeFilename);
+      const uploadDir = process.env.VERCEL
+        ? path.join("/tmp", "uploads", "pdfs")
+        : path.join(process.cwd(), "uploads", "pdfs");
+      const filePath = path.join(uploadDir, safeFilename);
 
       if (!fs.existsSync(filePath)) {
         res.status(404).send("PDF not found");
@@ -1329,6 +1335,63 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error serving PDF:", error);
       res.status(500).send("Error serving PDF");
+    }
+  });
+
+  // Google Drive Integration Routes
+  app.get("/api/google-drive/status", async (req, res) => {
+    try {
+      const config = await getGoogleDriveConfig();
+      res.json({
+        enabled: config.enabled,
+        authType: config.authType,
+        isConfigured: !!(config.serviceAccountJson || config.oauthRefreshToken),
+        rootFolderId: config.rootFolderId,
+        invoicesFolderName: config.invoicesFolderName,
+        hamaliFolderName: config.hamaliFolderName,
+        challansFolderName: config.challansFolderName,
+        makePublic: config.makePublic,
+        autoUpload: config.autoUpload,
+      });
+    } catch (error: any) {
+      console.error("Error getting Google Drive status:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/google-drive/test", async (req, res) => {
+    try {
+      const result = await testGoogleDriveConnection();
+      if (result.ok) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error: any) {
+      res.status(500).json({ ok: false, message: error?.message || "Connection test failed" });
+    }
+  });
+
+  app.post("/api/google-drive/upload", async (req, res) => {
+    try {
+      const { pdfBase64, filename, folderType } = req.body;
+      if (!pdfBase64) {
+        res.status(400).json({ error: "pdfBase64 is required" });
+        return;
+      }
+
+      const uploadResult = await uploadPdfToDrive({
+        pdfBase64,
+        filename,
+        folderType: folderType || "invoices",
+      });
+
+      res.json({ success: true, ...uploadResult });
+    } catch (error: any) {
+      console.error("Google Drive upload error:", error);
+      res.status(400).json({
+        error: error?.message || "Failed to upload to Google Drive",
+      });
     }
   });
 

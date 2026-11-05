@@ -616,3 +616,64 @@ export function useMigrateToCloud() {
     },
   });
 }
+
+// Google Drive API
+export interface GoogleDriveStatus {
+  enabled: boolean;
+  authType: "service_account" | "oauth";
+  isConfigured: boolean;
+  rootFolderId?: string;
+  invoicesFolderName?: string;
+  hamaliFolderName?: string;
+  challansFolderName?: string;
+  makePublic?: boolean;
+  autoUpload?: boolean;
+}
+
+export function useGoogleDriveStatus() {
+  return useQuery({
+    queryKey: ["googleDriveStatus"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/google-drive/status`);
+      if (!res.ok) throw new Error("Failed to fetch Google Drive status");
+      return res.json() as Promise<GoogleDriveStatus>;
+    },
+  });
+}
+
+export function useTestGoogleDrive() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API_BASE}/google-drive/test`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Connection test failed");
+      return data as { ok: boolean; message: string; email?: string; rootFolderName?: string };
+    },
+  });
+}
+
+export function useUploadToGoogleDrive() {
+  return useMutation({
+    mutationFn: async (payload: {
+      pdfBase64: string;
+      filename: string;
+      folderType?: "invoices" | "hamali" | "challans";
+    }) => {
+      const res = await fetch(`${API_BASE}/google-drive/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to upload to Google Drive");
+      return data as {
+        success: boolean;
+        fileId: string;
+        name: string;
+        webViewLink: string;
+        webContentLink?: string;
+        folderName: string;
+      };
+    },
+  });
+}

@@ -5,7 +5,7 @@ import { DeliveryChallanData, defaultChallan } from "@/lib/invoice-types";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
 import { Share2, Printer, Trash2, FileText, RefreshCw, Eye, PenLine, ZoomIn, ZoomOut, Loader2 } from "lucide-react";
-import { toPng } from "html-to-image";
+import { toJpeg } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { useToast } from "@/hooks/use-toast";
 import { PdfShareDialog } from "@/components/ui/pdf-share-dialog";
@@ -70,6 +70,7 @@ export function DeliveryChallan() {
     const [zoom, setZoom] = useState(0.85);
     const [isSharing, setIsSharing] = useState(false);
     const [sharePdfUrl, setSharePdfUrl] = useState("");
+    const [sharePdfBase64, setSharePdfBase64] = useState("");
     const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
     const handlePrint = useReactToPrint({
@@ -101,7 +102,12 @@ export function DeliveryChallan() {
         setIsSharing(true);
         try {
             // Using optimized pixelRatio: 1.5 for fast rendering on mobile
-            const dataUrl = await toPng(ref.current, { cacheBust: true, pixelRatio: 1.5 });
+            const dataUrl = await toJpeg(ref.current, {
+                quality: 0.9,
+                pixelRatio: 1.5,
+                skipFonts: true,
+                cacheBust: true,
+            });
             const pdf = new jsPDF({
                 orientation: "portrait",
                 unit: "mm",
@@ -112,13 +118,14 @@ export function DeliveryChallan() {
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-            pdf.addImage(dataUrl, "PNG", 0, 0, pdfWidth, pdfHeight);
+            pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
 
             const dateStr = shareData.date || new Date().toISOString().split('T')[0];
             const formattedDate = format(new Date(dateStr), "dd.MM.yyyy");
             const fileName = `(LNB Challan - ${shareData.challanNo || "Draft"} ${formattedDate}).pdf`;
 
             const pdfBase64 = pdf.output("datauristring").split(",")[1];
+            setSharePdfBase64(pdfBase64);
 
             const response = await fetch("/api/share-pdf", {
                 method: "POST",
@@ -418,6 +425,7 @@ export function DeliveryChallan() {
                             isOpen={isShareDialogOpen}
                             onClose={() => setIsShareDialogOpen(false)}
                             pdfUrl={sharePdfUrl}
+                            pdfBase64={sharePdfBase64}
                             documentNo={data.challanNo || "Draft"}
                             documentType="Challan"
                         />

@@ -13,7 +13,7 @@ import { useStore } from "@/lib/store";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { toPng } from "html-to-image";
+import { toJpeg } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { format } from "date-fns";
 import { useInvoices } from "@/lib/api";
@@ -59,6 +59,7 @@ export default function InvoiceBuilder() {
   const [zoom, setZoom] = useState(0.85);
   const [isSharing, setIsSharing] = useState(false);
   const [sharePdfUrl, setSharePdfUrl] = useState("");
+  const [sharePdfBase64, setSharePdfBase64] = useState("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   const { data: invoices = [] } = useInvoices();
@@ -82,17 +83,23 @@ export default function InvoiceBuilder() {
 
     setIsSharing(true);
     try {
-      const dataUrl = await toPng(shareContainerRef.current, { cacheBust: true, pixelRatio: 1.5 });
+      const dataUrl = await toJpeg(shareContainerRef.current, {
+        quality: 0.9,
+        pixelRatio: 1.5,
+        skipFonts: true,
+        cacheBust: true,
+      });
 
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const imgProps = pdf.getImageProperties(dataUrl);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      pdf.addImage(dataUrl, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
 
       const formattedDate = currentInvoice.date ? format(new Date(currentInvoice.date), "dd.MM.yyyy") : "";
       const fileName = `(LNB Invoice - ${currentInvoice.invoiceNo || "Draft"} ${formattedDate}).pdf`;
       const pdfBase64 = pdf.output("datauristring").split(",")[1];
+      setSharePdfBase64(pdfBase64);
 
       const response = await fetch("/api/share-pdf", {
         method: "POST",
@@ -428,6 +435,7 @@ export default function InvoiceBuilder() {
                   isOpen={isShareDialogOpen}
                   onClose={() => setIsShareDialogOpen(false)}
                   pdfUrl={sharePdfUrl}
+                  pdfBase64={sharePdfBase64}
                   documentNo={currentInvoice.invoiceNo || "Draft"}
                   documentType="Invoice"
                 />

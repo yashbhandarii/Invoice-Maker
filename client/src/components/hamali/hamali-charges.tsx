@@ -13,7 +13,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { Trash2, Plus, Save, FileText, Settings, Calculator, History, Printer, Menu, Edit, ChevronDown, ChevronRight, X } from "lucide-react";
+import { Trash2, Plus, Save, FileText, Settings, Calculator, History, Printer, Menu, Edit, ChevronDown, ChevronRight, X, CloudUpload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { jsPDF } from "jspdf";
@@ -27,7 +27,8 @@ import {
     useHamaliRecords,
     useAddHamaliRecord,
     useUpdateHamaliRecord,
-    useDeleteHamaliRecord
+    useDeleteHamaliRecord,
+    useUploadToGoogleDrive
 } from "@/lib/api";
 import { HamaliCategory, HamaliRecordItem } from "@/lib/invoice-types";
 
@@ -64,8 +65,10 @@ export function HamaliCharges() {
     const [activeTab, setActiveTab] = useState("calculator");
     const printRef = useRef<HTMLDivElement>(null);
     const [pdfData, setPdfData] = useState<any>(null);
+    const [isUploadingDrive, setIsUploadingDrive] = useState(false);
 
     // API Hooks
+    const uploadToDrive = useUploadToGoogleDrive();
     const { data: categories = [], isLoading: isLoadingCategories } = useHamaliCategories();
     const { data: records = [], isLoading: isLoadingRecords } = useHamaliRecords();
 
@@ -436,6 +439,83 @@ export function HamaliCharges() {
         }, 1000);
     };
 
+    const uploadHamaliToDrive = async (record?: any) => {
+        const data = getReportData(record);
+        if (!data) {
+            toast({ title: "Empty", description: "Nothing to upload.", variant: "destructive" });
+            return;
+        }
+        setPdfData(data);
+        setIsUploadingDrive(true);
+
+        setTimeout(async () => {
+            if (!printRef.current) {
+                toast({ title: "Error", description: "PDF generation failed: Rendering element not found.", variant: "destructive" });
+                setPdfData(null);
+                setIsUploadingDrive(false);
+                return;
+            }
+            try {
+                const elementHeight = printRef.current.scrollHeight;
+                const elementWidth = printRef.current.scrollWidth;
+                const canvas = await html2canvas(printRef.current, {
+                    scale: 1.5,
+                    backgroundColor: "#ffffff",
+                    useCORS: true,
+                    width: elementWidth,
+                    height: elementHeight,
+                    windowHeight: elementHeight,
+                    windowWidth: elementWidth
+                });
+
+                const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                const pdfe = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdfe.internal.pageSize.getWidth();
+                const pdfHeight = pdfe.internal.pageSize.getHeight();
+                const imgWidth = pdfWidth;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdfe.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+                heightLeft -= pdfHeight;
+
+                while (heightLeft > 0) {
+                    position -= pdfHeight;
+                    pdfe.addPage();
+                    pdfe.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+                    heightLeft -= pdfHeight;
+                }
+
+                const dateStr = format(data.dateObj, 'dd-MM-yyyy_HH-mm');
+                const filename = `Hamali_Report_${dateStr}.pdf`;
+                const pdfBase64 = pdfe.output('datauristring').split(',')[1];
+
+                const result = await uploadToDrive.mutateAsync({
+                    pdfBase64,
+                    filename,
+                    folderType: "hamali",
+                });
+
+                toast({
+                    title: "Saved to Google Drive!",
+                    description: `Hamali PDF uploaded into Google Drive > ${result.folderName} folder.`,
+                });
+                setPdfData(null);
+            } catch (err: any) {
+                toast({
+                    title: "Google Drive Upload Failed",
+                    description: err.message || "Failed to upload to Google Drive",
+                    variant: "destructive"
+                });
+                setPdfData(null);
+            } finally {
+                setIsUploadingDrive(false);
+            }
+        }, 1000);
+    };
+
     // Settings Handlers
     const handleAddCategory = () => {
         if (!newCatName || !newCatRate) return;
@@ -725,6 +805,9 @@ export function HamaliCharges() {
                                             <Button variant="outline" onClick={() => generatePDF()} disabled={calculateNetTotal() === 0} className="w-full md:w-auto">
                                                 <FileText className="h-4 w-4 mr-2" /> Export PDF
                                             </Button>
+                                            <Button variant="outline" onClick={() => uploadHamaliToDrive()} disabled={calculateNetTotal() === 0 || isUploadingDrive} className="w-full md:w-auto text-emerald-700 hover:text-emerald-800">
+                                                <CloudUpload className="h-4 w-4 mr-2 text-emerald-600" /> {isUploadingDrive ? "Uploading..." : "Save to Drive"}
+                                            </Button>
                                             <Button onClick={handleSaveRecord} className="bg-primary hover:bg-primary/90 w-full md:w-auto" disabled={calculateNetTotal() === 0}>
                                                 <Save className="h-4 w-4 mr-2" /> {editingRecordId ? "Update Record" : "Save Record"}
                                             </Button>
@@ -795,6 +878,9 @@ export function HamaliCharges() {
                                                         </Button>
                                                         <Button size="icon" variant="outline" className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:border-blue-200" onClick={() => generatePDF(rec)} title="Export PDF">
                                                             <FileText className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button size="icon" variant="outline" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200" onClick={() => uploadHamaliToDrive(rec)} title="Save to Google Drive">
+                                                            <CloudUpload className="h-3 w-3" />
                                                         </Button>
                                                         <Button size="icon" variant="outline" className="h-8 w-8 text-red-600 hover:bg-red-50 hover:border-red-200" onClick={() => handleDeleteRecord(rec.id)} title="Delete Record">
                                                             <Trash2 className="h-3 w-3" />

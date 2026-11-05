@@ -45,7 +45,7 @@ import { usePaginatedInvoices, useDeleteInvoice } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 import { useReactToPrint } from "react-to-print";
-import { toPng } from "html-to-image";
+import { toJpeg } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { InvoicePreview } from "./invoice-preview";
 import { PdfShareDialog } from "../ui/pdf-share-dialog";
@@ -93,6 +93,7 @@ export function InvoiceHistory({ onCreateNew, onEditInvoice }: InvoiceHistoryPro
   const [shareInvoice, setShareInvoice] = useState<InvoiceData | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [sharePdfUrl, setSharePdfUrl] = useState("");
+  const [sharePdfBase64, setSharePdfBase64] = useState("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   const historyPrintRef = useRef<HTMLDivElement>(null);
@@ -123,16 +124,22 @@ export function InvoiceHistory({ onCreateNew, onEditInvoice }: InvoiceHistoryPro
         if (!historyShareContainerRef.current) {
           throw new Error("Content container not found");
         }
-        const dataUrl = await toPng(historyShareContainerRef.current, { cacheBust: true, pixelRatio: 1.5 });
+        const dataUrl = await toJpeg(historyShareContainerRef.current, {
+          quality: 0.9,
+          pixelRatio: 1.5,
+          skipFonts: true,
+          cacheBust: true,
+        });
         const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
         const imgProps = pdf.getImageProperties(dataUrl);
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        pdf.addImage(dataUrl, "PNG", 0, 0, pdfWidth, pdfHeight);
+        pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
 
         const formattedDate = inv.date ? format(new Date(inv.date), "dd.MM.yyyy") : "";
         const fileName = `(LNB Invoice - ${inv.invoiceNo || "Draft"} ${formattedDate}).pdf`;
         const pdfBase64 = pdf.output("datauristring").split(",")[1];
+        setSharePdfBase64(pdfBase64);
 
         const response = await fetch("/api/share-pdf", {
           method: "POST",
@@ -687,6 +694,7 @@ export function InvoiceHistory({ onCreateNew, onEditInvoice }: InvoiceHistoryPro
           setShareInvoice(null);
         }}
         pdfUrl={sharePdfUrl}
+        pdfBase64={sharePdfBase64}
         documentNo={shareInvoice?.invoiceNo || "Draft"}
         documentType="Invoice"
       />

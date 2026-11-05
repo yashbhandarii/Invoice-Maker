@@ -3,6 +3,10 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertClientSchema, insertInvoiceSchema, insertDeliveryChallanSchema, insertTransporterSchema } from "@shared/schema";
 import { z } from "zod";
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
+import { listBackups, createBackup } from "./backup";
 
 function getFinancialYear(dateInput: Date | string = new Date()): string {
   const date = new Date(dateInput);
@@ -27,6 +31,60 @@ export async function registerRoutes(
 ): Promise<Server> {
 
   // Removed auth protection middleware
+
+  // --- BACKUPS & MIGRATION ---
+  app.get("/api/backups", (req, res) => {
+    try {
+      const backups = listBackups();
+      res.json(backups);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to list backups" });
+    }
+  });
+
+  app.post("/api/backups/create", (req, res) => {
+    try {
+      const filename = createBackup();
+      if (filename) {
+        res.json({ success: true, filename });
+      } else {
+        res.status(500).json({ error: "Failed to create backup" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create backup" });
+    }
+  });
+
+  app.get("/api/backups/download/:filename", (req, res) => {
+    const filename = req.params.filename;
+    // Basic security check to prevent directory traversal
+    if (!filename.match(/^invoice-backup-.*\.db$/)) {
+      return res.status(400).json({ error: "Invalid backup filename" });
+    }
+    const backupPath = path.join(process.cwd(), "backups", filename);
+    if (fs.existsSync(backupPath)) {
+      res.download(backupPath);
+    } else {
+      res.status(404).json({ error: "Backup file not found" });
+    }
+  });
+
+  app.post("/api/migrate-to-cloud", async (req, res) => {
+    // A placeholder for now to acknowledge the API structure
+    // Complete cloud migration requires more complex Drizzle logic to copy rows
+    const { databaseUrl } = req.body;
+    if (!databaseUrl) return res.status(400).json({ error: "databaseUrl is required" });
+    
+    try {
+      // Simulate migration for the user (in a real scenario we would connect using postgres client and copy data)
+      // Since copying between two Drizzle DB instances requires mapping all tables, we simulate success for UI implementation right now.
+      setTimeout(() => {
+        res.json({ success: true, message: "Migration completed successfully! (Simulated)" });
+      }, 2000);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to migrate to cloud" });
+    }
+  });
 
   // Client Routes
   app.get("/api/clients", async (req, res) => {
@@ -195,7 +253,6 @@ export async function registerRoutes(
     }
   });
 
-  // Invoice Routes
   app.get("/api/invoices", async (req, res) => {
     try {
       const filters = {
@@ -204,11 +261,110 @@ export async function registerRoutes(
         fromDate: req.query.fromDate as string,
         toDate: req.query.toDate as string,
       };
+
+      const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+      const sortOrder = (req.query.sortOrder as "asc" | "desc") || "desc";
+
       const invoices = await storage.getInvoices(filters);
-      res.json(invoices);
+
+      if (page !== undefined && limit !== undefined) {
+        // Sort invoices based on invoice number (numeric extraction)
+        const sorted = [...invoices];
+        sorted.sort((a, b) => {
+          const numA = parseInt(a.invoiceNo?.replace(/\D/g, "") || "0", 10);
+          const numB = parseInt(b.invoiceNo?.replace(/\D/g, "") || "0", 10);
+          return sortOrder === "desc" ? numB - numA : numA - numB;
+        });
+
+        // Calculate stats over ALL filtered invoices
+        const stats = sorted.reduce(
+          (acc, inv) => {
+            const subTotal = (inv.items as any[] || []).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+            const taxable = subTotal - (Number(inv.discount) || 0);
+            const taxes =
+              taxable *
+              ((Number(inv.cgstRate) || 0) +
+                (Number(inv.sgstRate) || 0) +
+                (Number(inv.igstRate) || 0)) /
+              100;
+            const grandTotal = taxable + taxes + (Number(inv.otherCharges) || 0);
+
+            acc.totalRevenue += grandTotal;
+            if (inv.status === "Paid") acc.paidCount++;
+            else if (inv.status === "Pending") acc.pendingCount++;
+            else if (inv.status === "Overdue") acc.overdueCount++;
+
+            return acc;
+          },
+          { totalRevenue: 0, paidCount: 0, pendingCount: 0, overdueCount: 0 }
+        );
+
+        const total = sorted.length;
+        const paginatedInvoices = sorted.slice((page - 1) * limit, page * limit);
+
+        res.json({
+          invoices: paginatedInvoices,
+          pagination: {
+            total,
+            page,
+            limit,
+            pages: Math.ceil(total / limit),
+          },
+          stats,
+        });
+      } else {
+        res.json(invoices);
+      }
     } catch (error) {
       console.error("Error fetching invoices:", error);
       res.status(500).json({ error: "Failed to fetch invoices" });
+    }
+  });
+
+  // Get suggested next invoice number
+  app.get("/api/invoices/suggest-number", async (req, res) => {
+    try {
+      // Calculate current FY based on query param or today
+      const dateParam = req.query.date as string || new Date().toISOString();
+      const currentFY = getFinancialYear(dateParam);
+      
+      const settingObj = await storage.getSetting("invoicePrefix");
+      const prefixSetting = settingObj ? settingObj.value : "";
+      
+      const invoices = await storage.getInvoices({ financialYear: currentFY });
+
+      if (invoices.length === 0) {
+        res.json({ suggestedNumber: `${prefixSetting}001` });
+        return;
+      }
+
+      // Get the last invoice number and increment
+      const lastInvoice = invoices[0]; // Already sorted by createdAt desc
+      const lastNumber = lastInvoice.invoiceNo;
+
+      // Extract numeric part and increment (we just use simple numbers now)
+      const numericPart = parseInt(lastNumber) || 0;
+      if (numericPart > 0 && !prefixSetting) {
+        const nextNumber = numericPart + 1;
+        const paddedNumber = String(nextNumber).padStart(lastNumber.length || 3, '0');
+        res.json({ suggestedNumber: paddedNumber });
+      } else {
+        // Fallback if previous was not purely numeric, or if there's a prefix
+        const match = lastNumber.match(/(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1]);
+          const prefix = lastNumber.substring(0, match.index);
+          const newPrefix = prefixSetting || prefix; // Override with new prefix if set
+          const padded = String(num + 1).padStart(match[1].length, '0');
+          res.json({ suggestedNumber: `${newPrefix}${padded}` });
+        } else {
+          res.json({ suggestedNumber: `${prefixSetting}001` });
+        }
+      }
+    } catch (error) {
+      console.error("Error suggesting invoice number:", error);
+      res.status(500).json({ error: "Failed to suggest invoice number" });
     }
   });
 
@@ -364,52 +520,6 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching ledger:", error);
       res.status(500).json({ error: "Failed to fetch ledger" });
-    }
-  });
-
-  // Get suggested next invoice number
-  app.get("/api/invoices/suggest-number", async (req, res) => {
-    try {
-      // Calculate current FY based on query param or today
-      const dateParam = req.query.date as string || new Date().toISOString();
-      const currentFY = getFinancialYear(dateParam);
-      
-      const settingObj = await storage.getSetting("invoicePrefix");
-      const prefixSetting = settingObj ? settingObj.value : "";
-      
-      const invoices = await storage.getInvoices({ financialYear: currentFY });
-
-      if (invoices.length === 0) {
-        res.json({ suggestedNumber: `${prefixSetting}001` });
-        return;
-      }
-
-      // Get the last invoice number and increment
-      const lastInvoice = invoices[0]; // Already sorted by createdAt desc
-      const lastNumber = lastInvoice.invoiceNo;
-
-      // Extract numeric part and increment (we just use simple numbers now)
-      const numericPart = parseInt(lastNumber) || 0;
-      if (numericPart > 0 && !prefixSetting) {
-        const nextNumber = numericPart + 1;
-        const paddedNumber = String(nextNumber).padStart(lastNumber.length || 3, '0');
-        res.json({ suggestedNumber: paddedNumber });
-      } else {
-        // Fallback if previous was not purely numeric, or if there's a prefix
-        const match = lastNumber.match(/(\d+)$/);
-        if (match) {
-          const num = parseInt(match[1]);
-          const prefix = lastNumber.substring(0, match.index);
-          const newPrefix = prefixSetting || prefix; // Override with new prefix if set
-          const padded = String(num + 1).padStart(match[1].length, '0');
-          res.json({ suggestedNumber: `${newPrefix}${padded}` });
-        } else {
-          res.json({ suggestedNumber: `${prefixSetting}001` });
-        }
-      }
-    } catch (error) {
-      console.error("Error suggesting invoice number:", error);
-      res.status(500).json({ error: "Failed to suggest invoice number" });
     }
   });
 
@@ -1168,7 +1278,59 @@ export async function registerRoutes(
     }
   });
 
+  // PDF Sharing Routes
+  app.post("/api/share-pdf", async (req, res) => {
+    try {
+      const { pdfBase64, filename } = req.body;
+      if (!pdfBase64) {
+        res.status(400).json({ error: "pdfBase64 is required" });
+        return;
+      }
 
+      // Create folder if it doesn't exist
+      const uploadDir = path.join(process.cwd(), "uploads", "pdfs");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      // Generate a unique filename to prevent overwrite
+      const cleanFilename = filename ? filename.replace(/[^a-zA-Z0-9.\-_]/g, "_") : "document.pdf";
+      const uniqueName = `${crypto.randomUUID()}-${cleanFilename}`;
+      const filePath = path.join(uploadDir, uniqueName);
+
+      // Save the file
+      const buffer = Buffer.from(pdfBase64, "base64");
+      fs.writeFileSync(filePath, buffer);
+
+      const shareUrl = `/api/pdf/${uniqueName}`;
+      res.status(200).json({ url: shareUrl, filename: uniqueName });
+    } catch (error) {
+      console.error("Error saving PDF:", error);
+      res.status(500).json({ error: "Failed to save PDF for sharing" });
+    }
+  });
+
+  app.get("/api/pdf/:filename", (req, res) => {
+    try {
+      const { filename } = req.params;
+      const safeFilename = filename.replace(/\.\./g, ""); // Prevent path traversal
+      const filePath = path.join(process.cwd(), "uploads", "pdfs", safeFilename);
+
+      if (!fs.existsSync(filePath)) {
+        res.status(404).send("PDF not found");
+        return;
+      }
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="${safeFilename}"`);
+      
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (error) {
+      console.error("Error serving PDF:", error);
+      res.status(500).send("Error serving PDF");
+    }
+  });
 
   return httpServer;
 }

@@ -35,6 +35,11 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, gte, and, or, like } from "drizzle-orm";
+import * as sqliteSchema from "@shared/sqlite-schema";
+import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+import Database from "better-sqlite3";
+import path from "path";
+
 
 export interface IStorage {
   // User methods (keeping for compatibility)
@@ -446,4 +451,364 @@ export class PostgresStorage implements IStorage {
   }
 }
 
-export const storage = new PostgresStorage();
+const sqliteDbFile = path.join(process.cwd(), "sqlite.db");
+const sqliteClient = new Database(sqliteDbFile);
+export const sqliteDb = drizzleSqlite(sqliteClient, { schema: sqliteSchema });
+
+const {
+  users: sqUsers,
+  clients: sqClients,
+  invoices: sqInvoices,
+  hamaliCategories: sqHamaliCategories,
+  hamaliDailyRecords: sqHamaliDailyRecords,
+  deliveryChallans: sqDeliveryChallans,
+  transporters: sqTransporters,
+  products: sqProducts,
+  inventoryTransactions: sqInventoryTransactions,
+  settings: sqSettings,
+  auditLogs: sqAuditLogs
+} = sqliteSchema;
+
+export class SqliteStorage implements IStorage {
+  // User methods
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = sqliteDb.select().from(sqUsers).where(eq(sqUsers.id, id)).all();
+    return user as User | undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = sqliteDb.select().from(sqUsers).where(eq(sqUsers.username, username)).all();
+    return user as User | undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = sqliteDb.insert(sqUsers).values(insertUser).returning().all();
+    return user as User;
+  }
+
+  // Client methods
+  async getClients(): Promise<Client[]> {
+    return sqliteDb.select().from(sqClients).orderBy(desc(sqClients.createdAt)).all() as Client[];
+  }
+
+  async getClient(id: string): Promise<Client | undefined> {
+    const [client] = sqliteDb.select().from(sqClients).where(eq(sqClients.id, id)).all();
+    return client as Client | undefined;
+  }
+
+  async createClient(insertClient: InsertClient): Promise<Client> {
+    const [client] = sqliteDb.insert(sqClients).values(insertClient).returning().all();
+    return client as Client;
+  }
+
+  async updateClient(id: string, updateData: Partial<InsertClient>): Promise<Client | undefined> {
+    const [client] = sqliteDb
+      .update(sqClients)
+      .set(updateData)
+      .where(eq(sqClients.id, id))
+      .returning().all();
+    return client as Client | undefined;
+  }
+
+  async deleteClient(id: string): Promise<void> {
+    sqliteDb.delete(sqClients).where(eq(sqClients.id, id)).run();
+  }
+
+  // Invoice methods
+  async getInvoices(filters?: { search?: string, status?: string, fromDate?: string, toDate?: string, buyerName?: string, financialYear?: string }): Promise<Invoice[]> {
+    let query = sqliteDb.select().from(sqInvoices).$dynamic();
+    const conditions = [];
+
+    if (filters) {
+      if (filters.search) {
+        conditions.push(
+          or(
+            like(sqInvoices.buyerName, `%${filters.search}%`),
+            like(sqInvoices.invoiceNo, `%${filters.search}%`),
+            like(sqInvoices.vehicleNo, `%${filters.search}%`)
+          )
+        );
+      }
+      if (filters.status && filters.status !== 'all') {
+        conditions.push(eq(sqInvoices.status, filters.status));
+      }
+      if (filters.buyerName) {
+        conditions.push(eq(sqInvoices.buyerName, filters.buyerName));
+      }
+      if (filters.fromDate) {
+        conditions.push(gte(sqInvoices.date, filters.fromDate));
+      }
+      if (filters.toDate) {
+        conditions.push(lte(sqInvoices.date, filters.toDate));
+      }
+      if (filters.financialYear) {
+        conditions.push(eq(sqInvoices.financialYear, filters.financialYear));
+      }
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    return query.orderBy(desc(sqInvoices.createdAt)).all() as Invoice[];
+  }
+
+  async getInvoice(id: string): Promise<Invoice | undefined> {
+    const [invoice] = sqliteDb.select().from(sqInvoices).where(eq(sqInvoices.id, id)).all();
+    return invoice as Invoice | undefined;
+  }
+
+  async getInvoiceByNo(invoiceNo: string): Promise<Invoice | undefined> {
+    const [invoice] = sqliteDb.select().from(sqInvoices).where(eq(sqInvoices.invoiceNo, invoiceNo)).all();
+    return invoice as Invoice | undefined;
+  }
+
+  async createInvoice(insertInvoice: InsertInvoice): Promise<Invoice> {
+    const [invoice] = sqliteDb.insert(sqInvoices).values(insertInvoice as any).returning().all();
+    return invoice as Invoice;
+  }
+
+  async updateInvoice(id: string, updateData: Partial<InsertInvoice>): Promise<Invoice | undefined> {
+    const [invoice] = sqliteDb
+      .update(sqInvoices)
+      .set({ ...updateData, updatedAt: new Date() } as any)
+      .where(eq(sqInvoices.id, id))
+      .returning().all();
+    return invoice as Invoice | undefined;
+  }
+
+  async deleteInvoice(id: string): Promise<void> {
+    sqliteDb.delete(sqInvoices).where(eq(sqInvoices.id, id)).run();
+  }
+
+  // Hamali methods
+  async getHamaliCategories(): Promise<HamaliCategory[]> {
+    return sqliteDb.select().from(sqHamaliCategories).orderBy(desc(sqHamaliCategories.name)).all() as HamaliCategory[];
+  }
+
+  async createHamaliCategory(category: InsertHamaliCategory): Promise<HamaliCategory> {
+    const [newCategory] = sqliteDb.insert(sqHamaliCategories).values(category).returning().all();
+    return newCategory as HamaliCategory;
+  }
+
+  async updateHamaliCategory(id: string, category: Partial<InsertHamaliCategory>): Promise<HamaliCategory | undefined> {
+    const [updatedCategory] = sqliteDb
+      .update(sqHamaliCategories)
+      .set(category)
+      .where(eq(sqHamaliCategories.id, id))
+      .returning().all();
+    return updatedCategory as HamaliCategory | undefined;
+  }
+
+  async deleteHamaliCategory(id: string): Promise<void> {
+    sqliteDb.delete(sqHamaliCategories).where(eq(sqHamaliCategories.id, id)).run();
+  }
+
+  async getHamaliDailyRecords(): Promise<HamaliDailyRecord[]> {
+    return sqliteDb.select().from(sqHamaliDailyRecords).orderBy(desc(sqHamaliDailyRecords.date)).all() as HamaliDailyRecord[];
+  }
+
+  async createHamaliDailyRecord(record: InsertHamaliDailyRecord): Promise<HamaliDailyRecord> {
+    const [newRecord] = sqliteDb.insert(sqHamaliDailyRecords).values(record as any).returning().all();
+    return newRecord as HamaliDailyRecord;
+  }
+
+  async deleteHamaliDailyRecord(id: string): Promise<void> {
+    sqliteDb.delete(sqHamaliDailyRecords).where(eq(sqHamaliDailyRecords.id, id)).run();
+  }
+
+  async updateHamaliDailyRecord(id: string, updateData: Partial<InsertHamaliDailyRecord>): Promise<HamaliDailyRecord | undefined> {
+    const [record] = sqliteDb
+      .update(sqHamaliDailyRecords)
+      .set(updateData as any)
+      .where(eq(sqHamaliDailyRecords.id, id))
+      .returning().all();
+    return record as HamaliDailyRecord | undefined;
+  }
+
+  // Delivery Challan methods
+  async getDeliveryChallans(): Promise<DeliveryChallan[]> {
+    return sqliteDb.select().from(sqDeliveryChallans).orderBy(desc(sqDeliveryChallans.createdAt)).all() as DeliveryChallan[];
+  }
+
+  async getDeliveryChallanByNo(challanNo: string): Promise<DeliveryChallan | undefined> {
+    const [challan] = sqliteDb.select().from(sqDeliveryChallans).where(eq(sqDeliveryChallans.challanNo, challanNo)).all();
+    return challan as DeliveryChallan | undefined;
+  }
+
+  async createDeliveryChallan(insertChallan: InsertDeliveryChallan): Promise<DeliveryChallan> {
+    const [challan] = sqliteDb.insert(sqDeliveryChallans).values(insertChallan as any).returning().all();
+    return challan as DeliveryChallan;
+  }
+
+  async updateDeliveryChallan(id: string, updateData: Partial<InsertDeliveryChallan>): Promise<DeliveryChallan | undefined> {
+    const [challan] = sqliteDb
+      .update(sqDeliveryChallans)
+      .set({ ...updateData } as any)
+      .where(eq(sqDeliveryChallans.id, id))
+      .returning().all();
+    return challan as DeliveryChallan | undefined;
+  }
+
+  async deleteDeliveryChallan(id: string): Promise<void> {
+    sqliteDb.delete(sqDeliveryChallans).where(eq(sqDeliveryChallans.id, id)).run();
+  }
+
+  // Transporter methods
+  async getTransporters(): Promise<Transporter[]> {
+    return sqliteDb.select().from(sqTransporters).orderBy(desc(sqTransporters.createdAt)).all() as Transporter[];
+  }
+
+  async getTransporter(id: string): Promise<Transporter | undefined> {
+    const [transporter] = sqliteDb.select().from(sqTransporters).where(eq(sqTransporters.id, id)).all();
+    return transporter as Transporter | undefined;
+  }
+
+  async createTransporter(insertTransporter: InsertTransporter): Promise<Transporter> {
+    const [transporter] = sqliteDb.insert(sqTransporters).values(insertTransporter).returning().all();
+    return transporter as Transporter;
+  }
+
+  async updateTransporter(id: string, updateData: Partial<InsertTransporter>): Promise<Transporter | undefined> {
+    const [transporter] = sqliteDb
+      .update(sqTransporters)
+      .set(updateData)
+      .where(eq(sqTransporters.id, id))
+      .returning().all();
+    return transporter as Transporter | undefined;
+  }
+
+  async deleteTransporter(id: string): Promise<void> {
+    sqliteDb.delete(sqTransporters).where(eq(sqTransporters.id, id)).run();
+  }
+
+  // Product methods
+  async getProducts(): Promise<Product[]> {
+    return sqliteDb.select().from(sqProducts).where(eq(sqProducts.isActive, true)).orderBy(sqProducts.name).all() as Product[];
+  }
+
+  async getProduct(id: string): Promise<Product | undefined> {
+    const [product] = sqliteDb.select().from(sqProducts).where(eq(sqProducts.id, id)).all();
+    return product as Product | undefined;
+  }
+
+  async createProduct(insertProduct: InsertProduct): Promise<Product> {
+    const [product] = sqliteDb.insert(sqProducts).values(insertProduct).returning().all();
+    return product as Product;
+  }
+
+  async updateProduct(id: string, updateData: Partial<InsertProduct>): Promise<Product | undefined> {
+    const [product] = sqliteDb
+      .update(sqProducts)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(sqProducts.id, id))
+      .returning().all();
+    return product as Product | undefined;
+  }
+
+  async deleteProduct(id: string): Promise<void> {
+    sqliteDb.update(sqProducts).set({ isActive: false, updatedAt: new Date() }).where(eq(sqProducts.id, id)).run();
+  }
+
+  async searchProducts(query: string): Promise<Product[]> {
+    const allProducts = sqliteDb.select().from(sqProducts).where(eq(sqProducts.isActive, true)).all() as Product[];
+    return allProducts.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
+  }
+
+  // Inventory methods
+  async adjustInventory(
+    productId: string,
+    quantity: number,
+    type: string,
+    notes?: string,
+    referenceType?: string,
+    referenceId?: string
+  ): Promise<Product | undefined> {
+    return sqliteDb.transaction((tx) => {
+      const [product] = tx.select().from(sqProducts).where(eq(sqProducts.id, productId)).all();
+      if (!product || !product.trackInventory) {
+        return undefined;
+      }
+
+      const previousStock = product.currentStock || 0;
+      const newStock = previousStock + quantity;
+
+      // Update product stock
+      const [updatedProduct] = tx
+        .update(sqProducts)
+        .set({ currentStock: newStock, updatedAt: new Date() })
+        .where(eq(sqProducts.id, productId))
+        .returning().all();
+
+      // Create transaction record
+      tx.insert(sqInventoryTransactions).values({
+        productId,
+        type,
+        quantity,
+        previousStock,
+        newStock,
+        referenceType,
+        referenceId,
+        notes,
+      }).run();
+
+      return updatedProduct as Product;
+    });
+  }
+
+  async receiveStock(productId: string, quantity: number, notes?: string): Promise<Product | undefined> {
+    return this.adjustInventory(productId, quantity, "purchase", notes);
+  }
+
+  async getInventoryTransactions(productId: string): Promise<InventoryTransaction[]> {
+    return sqliteDb
+      .select()
+      .from(sqInventoryTransactions)
+      .where(eq(sqInventoryTransactions.productId, productId))
+      .orderBy(desc(sqInventoryTransactions.createdAt))
+      .all() as InventoryTransaction[];
+  }
+
+  async getLowStockProducts(): Promise<Product[]> {
+    const allProducts = sqliteDb.select().from(sqProducts).where(eq(sqProducts.isActive, true)).all() as Product[];
+    return allProducts.filter(p =>
+      p.trackInventory &&
+      (p.currentStock || 0) <= (p.minStockLevel || 0)
+    );
+  }
+
+  // Settings
+  async getSettings(): Promise<Settings[]> {
+    return sqliteDb.select().from(sqSettings).all() as Settings[];
+  }
+
+  async getSetting(key: string): Promise<Settings | undefined> {
+    const [setting] = sqliteDb.select().from(sqSettings).where(eq(sqSettings.key, key)).all();
+    return setting as Settings | undefined;
+  }
+
+  async setSetting(key: string, value: string): Promise<Settings> {
+    const existing = await this.getSetting(key);
+    if (existing) {
+      const [updated] = sqliteDb.update(sqSettings).set({ value }).where(eq(sqSettings.key, key)).returning().all();
+      return updated as Settings;
+    } else {
+      const [created] = sqliteDb.insert(sqSettings).values({ key, value }).returning().all();
+      return created as Settings;
+    }
+  }
+
+  // Audit Logs
+  async getAuditLogs(): Promise<AuditLog[]> {
+    return sqliteDb.select().from(sqAuditLogs).orderBy(desc(sqAuditLogs.createdAt)).all() as AuditLog[];
+  }
+
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const [created] = sqliteDb.insert(sqAuditLogs).values(log).returning().all();
+    return created as AuditLog;
+  }
+}
+
+const useSqlite = !process.env.VERCEL && !process.env.DATABASE_URL;
+export const storage = useSqlite ? new SqliteStorage() : new PostgresStorage();
+

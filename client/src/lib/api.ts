@@ -82,6 +82,48 @@ export function useInvoices(filters?: { search?: string, status?: string, fromDa
   });
 }
 
+export function usePaginatedInvoices(filters?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  fromDate?: string;
+  toDate?: string;
+  sortOrder?: "asc" | "desc";
+}) {
+  return useQuery({
+    queryKey: ["invoices", "paginated", filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters?.page) params.append("page", String(filters.page));
+      if (filters?.limit) params.append("limit", String(filters.limit));
+      if (filters?.search) params.append("search", filters.search);
+      if (filters?.status && filters.status !== "all") params.append("status", filters.status);
+      if (filters?.fromDate) params.append("fromDate", filters.fromDate);
+      if (filters?.toDate) params.append("toDate", filters.toDate);
+      if (filters?.sortOrder) params.append("sortOrder", filters.sortOrder);
+      
+      const res = await fetch(`${API_BASE}/invoices?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch paginated invoices");
+      return res.json() as Promise<{
+        invoices: InvoiceData[];
+        pagination: {
+          total: number;
+          page: number;
+          limit: number;
+          pages: number;
+        };
+        stats: {
+          totalRevenue: number;
+          paidCount: number;
+          pendingCount: number;
+          overdueCount: number;
+        };
+      }>;
+    },
+  });
+}
+
 export function useAddInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -531,6 +573,46 @@ export function useDeleteProduct() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+// Backup & Migration API
+export function useBackups() {
+  return useQuery({
+    queryKey: ["backups"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/backups`);
+      if (!res.ok) throw new Error("Failed to fetch backups");
+      return res.json() as Promise<{ name: string; size: number; time: number }[]>;
+    },
+  });
+}
+
+export function useCreateBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API_BASE}/backups/create`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to create backup");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["backups"] });
+    },
+  });
+}
+
+export function useMigrateToCloud() {
+  return useMutation({
+    mutationFn: async (databaseUrl: string) => {
+      const res = await fetch(`${API_BASE}/migrate-to-cloud`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ databaseUrl }),
+      });
+      if (!res.ok) throw new Error("Failed to migrate to cloud");
+      return res.json();
     },
   });
 }

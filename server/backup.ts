@@ -19,10 +19,10 @@ export function initializeBackupSystem() {
   setInterval(createBackup, 6 * 60 * 60 * 1000);
 }
 
-function createBackup() {
+export function createBackup(): string | null {
   if (!fs.existsSync(DB_PATH)) {
     console.log("No database file found to backup.");
-    return;
+    return null;
   }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -33,10 +33,37 @@ function createBackup() {
     fs.copyFileSync(DB_PATH, backupPath);
     console.log(`Backup created successfully: ${backupPath}`);
     cleanOldBackups();
+    return backupFileName;
   } catch (error) {
     console.error("Failed to create database backup:", error);
+    return null;
   }
 }
+
+export function listBackups(): { name: string; size: number; time: number }[] {
+  if (!fs.existsSync(BACKUP_DIR)) {
+    return [];
+  }
+
+  try {
+    const files = fs.readdirSync(BACKUP_DIR);
+    return files
+      .filter(file => file.endsWith('.db') && file.startsWith('invoice-backup-'))
+      .map(file => {
+        const stats = fs.statSync(path.join(BACKUP_DIR, file));
+        return {
+          name: file,
+          size: stats.size,
+          time: stats.mtime.getTime()
+        };
+      })
+      .sort((a, b) => b.time - a.time); // Newest first
+  } catch (error) {
+    console.error("Error listing backups:", error);
+    return [];
+  }
+}
+
 
 function cleanOldBackups() {
   try {

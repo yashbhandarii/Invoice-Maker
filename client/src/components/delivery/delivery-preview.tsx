@@ -2,16 +2,18 @@ import React from "react";
 import { DeliveryChallanData } from "@/lib/invoice-types";
 import { format } from "date-fns";
 import { User, MapPin, Truck, Hash } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface DeliveryPreviewProps {
     data: DeliveryChallanData;
+    isStatic?: boolean;
 }
 
 export const DeliveryPreview = React.forwardRef<HTMLDivElement, DeliveryPreviewProps>(
-    ({ data }, ref) => {
+    ({ data, isStatic = false }, ref) => {
 
         return (
-            <div className="w-full overflow-auto bg-gray-100 p-8 flex justify-center print:bg-white print:p-0 print:overflow-hidden">
+            <div className={cn("w-full overflow-auto bg-gray-100 p-8 flex justify-center print:bg-white print:p-0 print:overflow-hidden", isStatic && "bg-transparent p-0 overflow-visible")}>
                 <style type="text/css" media="print">
                     {`
             @page { 
@@ -26,7 +28,12 @@ export const DeliveryPreview = React.forwardRef<HTMLDivElement, DeliveryPreviewP
                 </style>
                 <div
                     ref={ref}
-                    className="bg-white w-[210mm] h-[297mm] shadow-xl text-black font-sans relative print:shadow-none print:w-[210mm] print:h-[297mm] overflow-hidden flex flex-col transform scale-[0.45] sm:scale-75 md:scale-100 origin-top mb-[-140mm] sm:mb-[-70mm] md:mb-0"
+                    className={cn(
+                        "bg-white w-[210mm] h-[297mm] shadow-xl text-black font-sans relative print:shadow-none print:w-[210mm] print:h-[297mm] overflow-hidden flex flex-col",
+                        isStatic
+                            ? "shadow-none border border-slate-200"
+                            : "transform scale-[0.45] sm:scale-75 md:scale-100 origin-top mb-[-140mm] sm:mb-[-70mm] md:mb-0"
+                    )}
                     style={{ fontSize: '12px' }}
                 >
                     {/* Header Geometric Shapes */}

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
+import { useBackups, useCreateBackup, useMigrateToCloud } from "@/lib/api";
+import { Download, Database, Cloud, HardDrive, RefreshCw } from "lucide-react";
 
 export function SettingsPage() {
   const { data: settingsData, isLoading: loadingSettings } = useSettings();
@@ -61,8 +63,10 @@ export function SettingsPage() {
       </div>
 
       <Tabs defaultValue="company" className="w-full">
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 flex flex-wrap h-auto gap-1">
           <TabsTrigger value="company">Company Profile</TabsTrigger>
+          <TabsTrigger value="backups" className="gap-2"><HardDrive className="w-4 h-4" /> Data & Backups</TabsTrigger>
+          <TabsTrigger value="cloud" className="gap-2"><Cloud className="w-4 h-4" /> Cloud Migration</TabsTrigger>
           <TabsTrigger value="audit">Audit Logs</TabsTrigger>
         </TabsList>
 
@@ -172,6 +176,32 @@ export function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Backups Tab */}
+        <TabsContent value="backups">
+          <Card>
+            <CardHeader>
+              <CardTitle>Data & Backups</CardTitle>
+              <CardDescription>Manage your local database backups to prevent data loss.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <BackupsManager />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Cloud Migration Tab */}
+        <TabsContent value="cloud">
+          <Card>
+            <CardHeader>
+              <CardTitle>Cloud Migration</CardTitle>
+              <CardDescription>Securely migrate your local database to Supabase (PostgreSQL).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CloudMigrationPanel />
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -215,6 +245,138 @@ function AuditLogsList() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function BackupsManager() {
+  const { data: backups, isLoading } = useBackups();
+  const createBackup = useCreateBackup();
+  const { toast } = useToast();
+
+  const handleCreateBackup = () => {
+    createBackup.mutate(undefined, {
+      onSuccess: (res) => {
+        toast({ title: "Backup Created", description: `Successfully created ${res.filename}` });
+      },
+      onError: () => {
+        toast({ title: "Backup Failed", description: "Could not create backup.", variant: "destructive" });
+      }
+    });
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center bg-slate-50 p-4 rounded-lg border">
+        <div>
+          <h3 className="font-semibold flex items-center gap-2"><Database className="w-4 h-4 text-primary" /> Local Database</h3>
+          <p className="text-sm text-slate-500">The system automatically backs up data every 6 hours.</p>
+        </div>
+        <Button onClick={handleCreateBackup} disabled={createBackup.isPending} className="gap-2">
+          {createBackup.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <HardDrive className="w-4 h-4" />}
+          Backup Now
+        </Button>
+      </div>
+
+      <div>
+        <h4 className="text-sm font-medium mb-3">Available Backups</h4>
+        {isLoading ? (
+          <div className="text-sm text-slate-500">Loading backups...</div>
+        ) : !backups || backups.length === 0 ? (
+          <div className="text-sm text-slate-500 border border-dashed rounded p-6 text-center">No backups found.</div>
+        ) : (
+          <div className="rounded-md border max-h-[300px] overflow-y-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-muted text-muted-foreground border-b sticky top-0">
+                <tr>
+                  <th className="p-3 font-medium">Filename</th>
+                  <th className="p-3 font-medium">Date Created</th>
+                  <th className="p-3 font-medium">Size</th>
+                  <th className="p-3 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backups.map(backup => (
+                  <tr key={backup.name} className="border-b last:border-0 hover:bg-muted/50">
+                    <td className="p-3 font-medium">{backup.name}</td>
+                    <td className="p-3 text-slate-500">{format(new Date(backup.time), "dd MMM yyyy, hh:mm a")}</td>
+                    <td className="p-3 text-slate-500">{formatBytes(backup.size)}</td>
+                    <td className="p-3 text-right">
+                      <Button variant="ghost" size="sm" asChild className="text-blue-600 hover:text-blue-800">
+                        <a href={`/api/backups/download/${backup.name}`} download>
+                          <Download className="w-4 h-4 mr-1" /> Download
+                        </a>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CloudMigrationPanel() {
+  const [databaseUrl, setDatabaseUrl] = useState("");
+  const migrateMutation = useMigrateToCloud();
+  const { toast } = useToast();
+
+  const handleMigrate = () => {
+    if (!databaseUrl) {
+      toast({ title: "Required", description: "Please enter your Supabase connection string.", variant: "destructive" });
+      return;
+    }
+    
+    migrateMutation.mutate(databaseUrl, {
+      onSuccess: (res) => {
+        toast({ title: "Migration Started", description: res.message });
+        setDatabaseUrl("");
+      },
+      onError: (err: any) => {
+        toast({ title: "Migration Failed", description: err.message || "Failed to migrate data.", variant: "destructive" });
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 text-sm">
+        <p className="font-semibold mb-1 flex items-center gap-2"><Cloud className="w-4 h-4" /> Why migrate to the cloud?</p>
+        <p>Your data is currently stored locally on this computer. By migrating to Supabase (PostgreSQL), your business data will be safely backed up in the cloud, protected from hard drive failures, and accessible from any device.</p>
+      </div>
+
+      <div className="space-y-4 max-w-xl">
+        <div className="space-y-2">
+          <Label>Supabase Database URL</Label>
+          <Input 
+            type="password"
+            placeholder="postgresql://postgres:password@db.supabase.co:6543/postgres" 
+            value={databaseUrl}
+            onChange={(e) => setDatabaseUrl(e.target.value)}
+          />
+          <p className="text-xs text-slate-500">Create a free project at supabase.com and paste your connection string here.</p>
+        </div>
+
+        <Button 
+          onClick={handleMigrate} 
+          disabled={!databaseUrl || migrateMutation.isPending} 
+          className="w-full sm:w-auto bg-primary text-white gap-2"
+        >
+          {migrateMutation.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
+          {migrateMutation.isPending ? "Migrating Data..." : "Start Migration"}
+        </Button>
+      </div>
     </div>
   );
 }

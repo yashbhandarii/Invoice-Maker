@@ -111,7 +111,7 @@ export const defaultInvoice: InvoiceData = {
   buyerGst: "",
   buyerStateCode: "27",
 
-  invoiceNo: "2005",
+  invoiceNo: "",
   date: new Date().toISOString().split('T')[0],
   vehicleNo: "",
 

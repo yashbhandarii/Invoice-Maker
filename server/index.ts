@@ -15,6 +15,7 @@ declare module "http" {
 
 app.use(
   express.json({
+    limit: "50mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
@@ -99,7 +100,7 @@ if (!process.env.VERCEL) {
     httpServer.listen(
       {
         port,
-        host: "127.0.0.1",
+        host: "0.0.0.0",
       },
       () => {
         log(`serving on port ${port}`);

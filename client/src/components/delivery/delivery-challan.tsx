@@ -4,10 +4,11 @@ import { DeliveryPreview } from "./delivery-preview";
 import { DeliveryChallanData, defaultChallan } from "@/lib/invoice-types";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
-import { Share2, Printer, Trash2, FileText, RefreshCw, Eye, PenLine } from "lucide-react";
+import { Share2, Printer, Trash2, FileText, RefreshCw, Eye, PenLine, ZoomIn, ZoomOut, Loader2 } from "lucide-react";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { useToast } from "@/hooks/use-toast";
+import { PdfShareDialog } from "@/components/ui/pdf-share-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDeliveryChallans, useAddDeliveryChallan, useDeleteDeliveryChallan, useUpdateDeliveryChallan, useClients, useAddClient } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -62,8 +63,17 @@ export function DeliveryChallan() {
     const [printData, setPrintData] = useState<DeliveryChallanData | null>(null);
     const historyPrintRef = useRef<HTMLDivElement>(null);
 
+    const shareContainerRef = useRef<HTMLDivElement>(null);
+    const isSaved = history.some(c => c.id === data.id);
+
+    // Zoom and share states
+    const [zoom, setZoom] = useState(0.85);
+    const [isSharing, setIsSharing] = useState(false);
+    const [sharePdfUrl, setSharePdfUrl] = useState("");
+    const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+
     const handlePrint = useReactToPrint({
-        contentRef,
+        contentRef: shareContainerRef,
         documentTitle: `(LNB Challan - ${data.challanNo} ${format(new Date(data.date || new Date()), "dd.MM.yyyy")})`,
     });
 
@@ -80,11 +90,18 @@ export function DeliveryChallan() {
         }
     }, [printData]);
 
-    const handleShare = async (shareData: DeliveryChallanData = data, ref = contentRef) => {
+    const handleShare = async (shareData: DeliveryChallanData = data, ref = shareContainerRef) => {
+        if (!isSaved) {
+            toast({ title: "Save Required", description: "Please save the challan first before sharing.", variant: "destructive" });
+            return;
+        }
+
         if (!ref.current) return;
 
+        setIsSharing(true);
         try {
-            const dataUrl = await toPng(ref.current, { cacheBust: true, pixelRatio: 2 });
+            // Using optimized pixelRatio: 1.5 for fast rendering on mobile
+            const dataUrl = await toPng(ref.current, { cacheBust: true, pixelRatio: 1.5 });
             const pdf = new jsPDF({
                 orientation: "portrait",
                 unit: "mm",
@@ -101,31 +118,39 @@ export function DeliveryChallan() {
             const formattedDate = format(new Date(dateStr), "dd.MM.yyyy");
             const fileName = `(LNB Challan - ${shareData.challanNo || "Draft"} ${formattedDate}).pdf`;
 
-            const pdfBlob = pdf.output("blob");
-            const file = new File([pdfBlob], fileName, { type: "application/pdf" });
+            const pdfBase64 = pdf.output("datauristring").split(",")[1];
 
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                try {
-                    await navigator.share({
-                        files: [file],
-                        title: `Delivery Challan ${shareData.challanNo}`,
-                        text: `Please find the delivery challan ${shareData.challanNo} attached.`,
-                    });
-                } catch (e: any) {
-                    if (e.name !== 'AbortError') throw e;
-                }
-            } else {
-                pdf.save(fileName);
-                const message = `Please find the delivery challan ${shareData.challanNo || "Draft"} attached.`;
-                const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-                window.open(whatsappUrl, "_blank");
-                toast({ title: "PDF Downloaded", description: "Attach PDF to WhatsApp." });
+            const response = await fetch("/api/share-pdf", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    pdfBase64,
+                    filename: fileName,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to upload PDF");
             }
 
+            const resData = await response.json();
+            setSharePdfUrl(resData.url);
+            setIsShareDialogOpen(true);
         } catch (error) {
             console.error("Error sharing PDF:", error);
             toast({ title: "Error", description: "Share failed", variant: "destructive" });
+        } finally {
+            setIsSharing(false);
         }
+    };
+
+    const handleNew = () => {
+        setData({
+            ...defaultChallan,
+            challanNo: ""
+        });
     };
 
     const handleSave = async () => {
@@ -136,10 +161,13 @@ export function DeliveryChallan() {
 
         try {
             if (data.id) {
-                await updateMutation.mutateAsync({ id: data.id, data });
+                const saved = await updateMutation.mutateAsync({ id: data.id, data });
                 toast({ title: "Updated", description: "Challan updated successfully" });
+                if (saved) {
+                    setData(saved);
+                }
             } else {
-                await addMutation.mutateAsync(data);
+                const saved = await addMutation.mutateAsync(data);
                 toast({ title: "Saved", description: "Challan saved successfully" });
 
                 // Auto-save client if new
@@ -161,11 +189,10 @@ export function DeliveryChallan() {
                     }
                 }
 
-                // Calculate next number immediately for UI smoothness
-                const nextNo = String(Number(data.challanNo) + 1);
-                setData({ ...defaultChallan, challanNo: nextNo });
+                if (saved) {
+                    setData(saved);
+                }
             }
-            setActiveTab("history");
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         }
@@ -288,27 +315,112 @@ export function DeliveryChallan() {
                                 defaultValues={data}
                                 onUpdate={setData}
                                 onPrint={() => handlePrint && handlePrint()}
-                                onShare={() => handleShare(data, contentRef)}
+                                onShare={() => handleShare(data, shareContainerRef)}
                                 onSave={handleSave}
+                                isSaved={isSaved}
+                                onNew={handleNew}
                             />
                         </div>
 
                         {/* Preview Panel */}
-                        <div className={`flex-1 bg-muted/30 overflow-auto p-4 md:p-8 flex items-start justify-center relative ${
+                        <div className={`flex-1 bg-muted/30 overflow-auto p-4 md:p-8 flex flex-col items-center justify-start relative ${
                             mobileChallanView === "preview" ? "h-full" : "hidden md:flex"
                         }`}>
-                            <div className="absolute top-4 right-4 md:hidden flex gap-2 z-10">
-                                <Button onClick={() => handleShare(data, contentRef)} size="sm" variant="outline" className="h-9 border-green-600 text-green-600 bg-white shadow-sm">
-                                    <Share2 className="h-4 w-4 mr-1" /> Share
+                            <div className="absolute top-4 right-4 md:hidden flex gap-2 z-20">
+                                <Button 
+                                    onClick={() => handleShare(data, shareContainerRef)} 
+                                    disabled={!isSaved || isSharing}
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-9 border-green-600 text-green-600 bg-white shadow-sm disabled:opacity-50"
+                                    title={!isSaved ? "Please save challan first to share" : "Share"}
+                                >
+                                    {isSharing ? (
+                                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                    ) : (
+                                        <Share2 className="h-4 w-4 mr-1" />
+                                    )}
+                                    Share
                                 </Button>
-                                <Button onClick={() => handlePrint && handlePrint()} size="sm" className="h-9 shadow-sm">
+                                <Button 
+                                    onClick={() => handlePrint && handlePrint()} 
+                                    disabled={!isSaved}
+                                    size="sm" 
+                                    className="h-9 shadow-sm disabled:opacity-50"
+                                    title={!isSaved ? "Please save challan first to print" : "Print"}
+                                >
                                     <Printer className="h-4 w-4 mr-1" /> Print
                                 </Button>
                             </div>
-                            <div className="scale-[0.48] sm:scale-[0.6] md:scale-[0.85] lg:scale-100 origin-top transition-transform pb-20">
+
+                            {/* Glassy zoom controls */}
+                            <div className="sticky top-0 mb-4 bg-white/80 dark:bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-full border shadow-md flex items-center gap-2 z-20 transition-all select-none">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 rounded-full"
+                                    onClick={() => setZoom(prev => Math.max(0.4, prev - 0.1))}
+                                    title="Zoom Out"
+                                >
+                                    <ZoomOut className="h-3.5 w-3.5" />
+                                </Button>
+                                <span className="text-xs font-semibold w-10 text-center select-none">
+                                    {Math.round(zoom * 100)}%
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 rounded-full"
+                                    onClick={() => setZoom(prev => Math.min(2.0, prev + 0.1))}
+                                    title="Zoom In"
+                                >
+                                    <ZoomIn className="h-3.5 w-3.5" />
+                                </Button>
+                                <div className="w-[1px] h-3 bg-muted mx-1" />
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 rounded-full text-xs font-medium"
+                                    onClick={() => setZoom(0.85)}
+                                >
+                                    Reset
+                                </Button>
+                            </div>
+
+                            {isSharing && (
+                                <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-30 animate-in fade-in duration-200">
+                                    <div className="bg-card p-4 rounded-xl border shadow-lg flex items-center gap-3">
+                                        <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                                        <span className="text-sm font-medium text-muted-foreground">Uploading PDF for sharing...</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div 
+                                style={{ 
+                                    transform: `scale(${zoom})`, 
+                                    transformOrigin: "top center",
+                                    marginBottom: `calc((1 - ${zoom}) * -100%)`
+                                }} 
+                                className="transition-transform duration-200 pb-20 origin-top"
+                            >
                                 <DeliveryPreview ref={contentRef} data={data} />
                             </div>
                         </div>
+
+                        {/* Hidden container for PDF capture - unscaled and offscreen */}
+                        <div style={{ position: "absolute", left: "-9999px", top: "-9999px", width: "210mm", height: "297mm", overflow: "hidden" }}>
+                            <DeliveryPreview ref={shareContainerRef} data={data} isStatic={true} />
+                        </div>
+
+                        {/* Share Dialog */}
+                        <PdfShareDialog
+                            isOpen={isShareDialogOpen}
+                            onClose={() => setIsShareDialogOpen(false)}
+                            pdfUrl={sharePdfUrl}
+                            documentNo={data.challanNo || "Draft"}
+                            documentType="Challan"
+                        />
                     </div>
                 </TabsContent>
 

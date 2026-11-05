@@ -26,12 +26,13 @@ interface DeliveryFormProps {
     defaultValues?: DeliveryChallanData;
     onUpdate: (data: DeliveryChallanData) => void;
     onPrint: () => void;
-
     onShare?: () => void;
     onSave?: () => void;
+    isSaved?: boolean;
+    onNew?: () => void;
 }
 
-export function DeliveryForm({ defaultValues, onUpdate, onPrint, onShare, onSave }: DeliveryFormProps) {
+export function DeliveryForm({ defaultValues, onUpdate, onPrint, onShare, onSave, isSaved = false, onNew }: DeliveryFormProps) {
     const form = useForm<DeliveryChallanData>({
         resolver: zodResolver(deliveryChallanSchema),
         defaultValues: defaultValues || defaultChallan,
@@ -148,15 +149,35 @@ export function DeliveryForm({ defaultValues, onUpdate, onPrint, onShare, onSave
             <div className="flex justify-between items-center gap-2 flex-wrap">
                 <h2 className="text-xl font-bold tracking-tight">Delivery Editor</h2>
                 <div className="flex gap-2">
-                    <Button onClick={onShare} variant="outline" size="sm" className="h-8 border-green-600 text-green-600 hover:bg-green-50">
-                        <Share2 className="w-4 h-4 sm:mr-2" />
-                        <span className="hidden sm:inline">Share</span>
-                    </Button>
+                    {defaultValues?.id && onNew && (
+                        <Button onClick={onNew} variant="outline" size="sm" className="h-8">
+                            <Plus className="w-4 h-4 sm:mr-2" />
+                            <span className="hidden sm:inline">New</span>
+                        </Button>
+                    )}
                     <Button onClick={handleInternalSave} variant="default" size="sm" className="bg-green-600 text-white hover:bg-green-700 h-8">
                         <Save className="w-4 h-4 sm:mr-2" />
                         <span className="hidden sm:inline">Save</span>
                     </Button>
-                    <Button onClick={onPrint} variant="default" size="sm" className="bg-primary text-white hover:bg-primary/90 h-8">
+                    <Button 
+                        onClick={onShare} 
+                        disabled={!isSaved}
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 border-green-600 text-green-600 hover:bg-green-50 disabled:opacity-50"
+                        title={!isSaved ? "Please save challan first to share" : "Share"}
+                    >
+                        <Share2 className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Share</span>
+                    </Button>
+                    <Button 
+                        onClick={onPrint} 
+                        disabled={!isSaved}
+                        variant="default" 
+                        size="sm" 
+                        className="bg-primary text-white hover:bg-primary/90 h-8 disabled:opacity-50"
+                        title={!isSaved ? "Please save challan first to print" : "Print"}
+                    >
                         <Printer className="w-4 h-4 sm:mr-2" />
                         <span className="hidden sm:inline">Print</span>
                     </Button>

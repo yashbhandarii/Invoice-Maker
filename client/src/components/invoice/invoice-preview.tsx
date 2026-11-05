@@ -5,10 +5,11 @@ import { format } from "date-fns";
 
 interface InvoicePreviewProps {
   data: InvoiceData;
+  isStatic?: boolean;
 }
 
 export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewProps>(
-  ({ data }, ref) => {
+  ({ data, isStatic = false }, ref) => {
 
     // Calculate totals
     // Calculate totals
@@ -30,7 +31,7 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
     const totalBalance = grandTotal - advance;
 
     return (
-      <div className="w-full overflow-auto bg-gray-100 p-8 flex justify-center print:bg-white print:p-0 print:overflow-hidden">
+      <div className={cn("w-full overflow-auto bg-gray-100 p-8 flex justify-center print:bg-white print:p-0 print:overflow-hidden", isStatic && "bg-transparent p-0 overflow-visible")}>
         <style type="text/css" media="print">
           {`
             @page { 
@@ -45,7 +46,12 @@ export const InvoicePreview = React.forwardRef<HTMLDivElement, InvoicePreviewPro
         </style>
         <div
           ref={ref}
-          className="bg-white w-[210mm] h-[297mm] p-4 md:p-8 shadow-xl text-black font-serif relative print:shadow-none print:w-[210mm] print:h-[297mm] print:p-4 overflow-hidden flex flex-col transform scale-[0.45] sm:scale-75 md:scale-100 origin-top mb-[-140mm] sm:mb-[-70mm] md:mb-0"
+          className={cn(
+            "bg-white w-[210mm] h-[297mm] p-4 md:p-8 shadow-xl text-black font-serif relative print:shadow-none print:w-[210mm] print:h-[297mm] print:p-4 overflow-hidden flex flex-col",
+            isStatic
+              ? "shadow-none border border-slate-200"
+              : "transform scale-[0.45] sm:scale-75 md:scale-100 origin-top mb-[-140mm] sm:mb-[-70mm] md:mb-0"
+          )}
           style={{ fontSize: '14px' }}
         >
           {/* Main Border Container */}

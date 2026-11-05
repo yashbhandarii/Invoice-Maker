@@ -1352,9 +1352,154 @@ export async function registerRoutes(
         challansFolderName: config.challansFolderName,
         makePublic: config.makePublic,
         autoUpload: config.autoUpload,
+        userEmail: config.userEmail,
+        hasOauthRefreshToken: !!config.oauthRefreshToken,
+        oauthClientId: config.oauthClientId,
       });
     } catch (error: any) {
       console.error("Error getting Google Drive status:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Start Google OAuth flow
+  app.get("/api/google-drive/oauth-start", async (req, res) => {
+    try {
+      const config = await getGoogleDriveConfig();
+      const clientId = (req.query.clientId as string)?.trim() || config.oauthClientId;
+      const clientSecret = (req.query.clientSecret as string)?.trim() || config.oauthClientSecret;
+      const rootFolderId = (req.query.rootFolderId as string)?.trim() || "";
+
+      if (!clientId || !clientSecret) {
+        return res.status(400).send("Please provide both OAuth Client ID and Client Secret.");
+      }
+
+      await storage.setSetting("googleDrive_oauthClientId", clientId);
+      await storage.setSetting("googleDrive_oauthClientSecret", clientSecret);
+      if (rootFolderId) {
+        await storage.setSetting("googleDrive_rootFolderId", rootFolderId);
+      }
+
+      const host = req.get("host") || "localhost:5000";
+      const protocol = req.protocol === "https" || host.includes("vercel.app") ? "https" : "http";
+      const redirectUri = `${protocol}://${host}/api/google-drive/oauth-callback`;
+
+      const statePayload = Buffer.from(
+        JSON.stringify({ clientId, clientSecret, redirectUri }),
+      ).toString("base64url");
+
+      const authUrl =
+        `https://accounts.google.com/o/oauth2/v2/auth?` +
+        new URLSearchParams({
+          client_id: clientId,
+          redirect_uri: redirectUri,
+          response_type: "code",
+          scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file",
+          access_type: "offline",
+          prompt: "consent",
+          state: statePayload,
+        }).toString();
+
+      res.redirect(authUrl);
+    } catch (error: any) {
+      console.error("Error starting Google OAuth:", error);
+      res.status(500).send(`Failed to start Google OAuth: ${error.message}`);
+    }
+  });
+
+  // Google OAuth Callback
+  app.get("/api/google-drive/oauth-callback", async (req, res) => {
+    try {
+      const code = req.query.code as string;
+      const error = req.query.error as string;
+      const stateRaw = req.query.state as string;
+
+      if (error) {
+        return res.redirect(`/settings?drive_error=${encodeURIComponent("Google authorization denied: " + error)}`);
+      }
+
+      if (!code) {
+        return res.redirect(`/settings?drive_error=${encodeURIComponent("No authorization code received from Google.")}`);
+      }
+
+      let stateData: any = {};
+      if (stateRaw) {
+        try {
+          stateData = JSON.parse(Buffer.from(stateRaw, "base64url").toString("utf-8"));
+        } catch (_) {}
+      }
+
+      const config = await getGoogleDriveConfig();
+      const clientId = stateData.clientId || config.oauthClientId;
+      const clientSecret = stateData.clientSecret || config.oauthClientSecret;
+      const host = req.get("host") || "localhost:5000";
+      const protocol = req.protocol === "https" || host.includes("vercel.app") ? "https" : "http";
+      const redirectUri = stateData.redirectUri || `${protocol}://${host}/api/google-drive/oauth-callback`;
+
+      if (!clientId || !clientSecret) {
+        return res.redirect(`/settings?drive_error=${encodeURIComponent("OAuth credentials missing.")}`);
+      }
+
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: "authorization_code",
+        }),
+      });
+
+      if (!tokenRes.ok) {
+        const errText = await tokenRes.text();
+        console.error("Token exchange failed:", errText);
+        return res.redirect(`/settings?drive_error=${encodeURIComponent("Token exchange failed: " + errText)}`);
+      }
+
+      const tokenData = await tokenRes.json();
+      const refreshToken = tokenData.refresh_token;
+      const accessToken = tokenData.access_token;
+
+      let userEmail = "";
+      if (accessToken) {
+        try {
+          const aboutRes = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (aboutRes.ok) {
+            const aboutData = await aboutRes.json();
+            userEmail = aboutData.user?.emailAddress || "";
+          }
+        } catch (_) {}
+      }
+
+      await storage.setSetting("googleDrive_enabled", "true");
+      await storage.setSetting("googleDrive_authType", "oauth");
+      await storage.setSetting("googleDrive_oauthClientId", clientId);
+      await storage.setSetting("googleDrive_oauthClientSecret", clientSecret);
+      if (refreshToken) {
+        await storage.setSetting("googleDrive_oauthRefreshToken", refreshToken);
+      }
+      if (userEmail) {
+        await storage.setSetting("googleDrive_userEmail", userEmail);
+      }
+
+      res.redirect(`/settings?drive_connected=true&email=${encodeURIComponent(userEmail || "Google User")}`);
+    } catch (error: any) {
+      console.error("Google OAuth callback error:", error);
+      res.redirect(`/settings?drive_error=${encodeURIComponent(error.message || "Failed to complete Google Drive connection.")}`);
+    }
+  });
+
+  // Disconnect Google Drive
+  app.post("/api/google-drive/oauth-disconnect", async (req, res) => {
+    try {
+      await storage.setSetting("googleDrive_oauthRefreshToken", "");
+      await storage.setSetting("googleDrive_userEmail", "");
+      res.json({ success: true, message: "Disconnected Google Drive account" });
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });

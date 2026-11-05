@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
-import { useBackups, useCreateBackup, useMigrateToCloud, useGoogleDriveStatus, useTestGoogleDrive } from "@/lib/api";
-import { Download, Database, Cloud, HardDrive, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Key, FolderOpen, Info, Copy } from "lucide-react";
+import { useBackups, useCreateBackup, useMigrateToCloud, useGoogleDriveStatus, useTestGoogleDrive, useDisconnectGoogleDrive } from "@/lib/api";
+import { Download, Database, Cloud, HardDrive, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Key, FolderOpen, Info, Copy, LogOut, Check } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -417,10 +417,11 @@ function GoogleDriveSettingsPanel() {
   const { data: settingsData } = useSettings();
   const updateSettings = useUpdateSettings();
   const testConnection = useTestGoogleDrive();
+  const disconnectDrive = useDisconnectGoogleDrive();
   const { toast } = useToast();
 
   const [form, setForm] = useState({
-    authType: "service_account",
+    authType: "oauth",
     serviceAccountJson: "",
     rootFolderId: "",
     invoicesFolderName: "Invoices",
@@ -440,10 +441,33 @@ function GoogleDriveSettingsPanel() {
     rootFolderName?: string;
   } | null>(null);
 
+  const [copiedRedirectUri, setCopiedRedirectUri] = useState(false);
+
+  // Check URL query parameters on return from Google OAuth
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("drive_connected") === "true") {
+      const email = params.get("email");
+      toast({
+        title: "Google Drive Connected!",
+        description: `Successfully signed in as ${email || "your Google Account"}. Cloud PDF uploads are now active with your 15 GB quota!`,
+      });
+      refetchStatus();
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get("drive_error")) {
+      toast({
+        title: "Google Drive Connection Failed",
+        description: decodeURIComponent(params.get("drive_error") || ""),
+        variant: "destructive",
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   useEffect(() => {
     if (settingsData) {
       setForm({
-        authType: settingsData["googleDrive_authType"] || "service_account",
+        authType: settingsData["googleDrive_authType"] || (settingsData["googleDrive_serviceAccountJson"] ? "service_account" : "oauth"),
         serviceAccountJson: settingsData["googleDrive_serviceAccountJson"] || "",
         rootFolderId: settingsData["googleDrive_rootFolderId"] || "",
         invoicesFolderName: settingsData["googleDrive_invoicesFolderName"] || "Invoices",
@@ -493,6 +517,39 @@ function GoogleDriveSettingsPanel() {
     );
   };
 
+  const handleGoogleSignIn = () => {
+    if (!form.oauthClientId?.trim() || !form.oauthClientSecret?.trim()) {
+      toast({
+        title: "Credentials Required",
+        description: "Please enter your OAuth Client ID and Client Secret first before clicking Connect.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const cleanClientId = form.oauthClientId.trim();
+    const cleanClientSecret = form.oauthClientSecret.trim();
+    const cleanRootFolderId = form.rootFolderId.trim();
+
+    window.location.href = `/api/google-drive/oauth-start?clientId=${encodeURIComponent(cleanClientId)}&clientSecret=${encodeURIComponent(cleanClientSecret)}&rootFolderId=${encodeURIComponent(cleanRootFolderId)}`;
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnectDrive.mutateAsync();
+      toast({
+        title: "Disconnected",
+        description: "Google Drive account has been disconnected.",
+      });
+      refetchStatus();
+    } catch (err: any) {
+      toast({
+        title: "Disconnect Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleTest = async () => {
     setTestResult(null);
     if (form.authType === "service_account" && (!form.serviceAccountJson || !form.serviceAccountJson.trim())) {
@@ -527,6 +584,10 @@ function GoogleDriveSettingsPanel() {
     }
   };
 
+  const currentRedirectUri = typeof window !== "undefined"
+    ? `${window.location.origin}/api/google-drive/oauth-callback`
+    : "http://localhost:5000/api/google-drive/oauth-callback";
+
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Status Banner */}
@@ -540,13 +601,18 @@ function GoogleDriveSettingsPanel() {
             <GoogleDriveIcon className="w-6 h-6" />
           </div>
           <div>
-            <h4 className="font-semibold text-sm">
+            <h4 className="font-semibold text-sm flex items-center gap-2">
               {driveStatus?.isConfigured ? "Google Drive Configured & Active" : "Google Drive Not Configured"}
+              {driveStatus?.userEmail && (
+                <span className="text-xs font-normal bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                  {driveStatus.userEmail}
+                </span>
+              )}
             </h4>
             <p className="text-xs opacity-90 mt-0.5">
               {driveStatus?.isConfigured
                 ? "PDF documents will upload directly to your Google Drive folders."
-                : "Add your Service Account key or OAuth credentials below to enable cloud uploads."}
+                : "Connect your Google account below to enable seamless cloud uploads."}
             </p>
           </div>
         </div>
@@ -590,7 +656,7 @@ function GoogleDriveSettingsPanel() {
             )}
             {testResult.email && (
               <div className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-                Service Account: {testResult.email}
+                Account: {testResult.email}
               </div>
             )}
           </div>
@@ -604,18 +670,7 @@ function GoogleDriveSettingsPanel() {
         </h3>
 
         {/* Auth Type Selector */}
-        <div className="flex gap-4">
-          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-            <input
-              type="radio"
-              name="authType"
-              value="service_account"
-              checked={form.authType === "service_account"}
-              onChange={() => setForm({ ...form, authType: "service_account" })}
-              className="text-primary"
-            />
-            <span>Google Service Account (Recommended)</span>
-          </label>
+        <div className="flex flex-col sm:flex-row gap-4 p-3 bg-slate-50 border rounded-lg">
           <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
             <input
               type="radio"
@@ -625,88 +680,170 @@ function GoogleDriveSettingsPanel() {
               onChange={() => setForm({ ...form, authType: "oauth" })}
               className="text-primary"
             />
-            <span>OAuth 2.0 Credentials</span>
+            <span className="font-semibold text-slate-900">
+              OAuth 2.0 Credentials <span className="text-xs font-normal text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full ml-1">Recommended for @gmail.com</span>
+            </span>
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+            <input
+              type="radio"
+              name="authType"
+              value="service_account"
+              checked={form.authType === "service_account"}
+              onChange={() => setForm({ ...form, authType: "service_account" })}
+              className="text-primary"
+            />
+            <span>Google Service Account <span className="text-xs text-slate-500">(Google Workspace Shared Drives only)</span></span>
           </label>
         </div>
 
-        {form.authType === "service_account" ? (
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold">Service Account Key (JSON)</Label>
-            <Textarea
-              placeholder='Paste full contents of your Google Service Account JSON key here: {"type": "service_account", "project_id": "...", "private_key": "...", "client_email": "..."}'
-              rows={5}
-              value={form.serviceAccountJson}
-              onChange={(e) => setForm({ ...form, serviceAccountJson: e.target.value })}
-              className="font-mono text-xs"
-            />
-            {(() => {
-              let detectedEmail = "";
-              if (form.serviceAccountJson) {
-                try {
-                  const parsed = JSON.parse(form.serviceAccountJson);
-                  detectedEmail = parsed.client_email || "";
-                } catch (_) {}
-              }
-              return detectedEmail ? (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 bg-blue-50/90 border border-blue-200 rounded-lg text-blue-900 text-xs gap-2">
-                  <div>
-                    <span className="font-semibold text-blue-950">Service Account Email:</span>
-                    <code className="ml-2 font-mono bg-white px-2 py-0.5 rounded border border-blue-200 text-blue-800 select-all font-semibold">
-                      {detectedEmail}
-                    </code>
-                    <p className="mt-1 text-[11px] text-blue-700">
-                      Share your Google Drive folder (<strong>{form.rootFolderId || "Root Folder"}</strong>) with this email address as <strong>Editor</strong>.
+        {form.authType === "oauth" ? (
+          <div className="space-y-4">
+            {/* Why OAuth banner */}
+            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-lg text-blue-900 text-xs leading-relaxed">
+              <strong>Why OAuth 2.0?</strong> Personal Google Accounts (<code className="font-mono">@gmail.com</code>) give Service Accounts 0 MB of storage quota, which causes Google to block uploads with <code className="font-mono">storageQuotaExceeded</code>. OAuth 2.0 connects directly to your personal Google account with your full <strong>15 GB storage quota</strong>!
+            </div>
+
+            {/* Redirect URI copy box */}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1.5">
+              <span className="font-semibold text-slate-700">Authorized Redirect URI (Copy this into Google Cloud Console):</span>
+              <div className="flex items-center gap-2 mt-1">
+                <code className="font-mono bg-white px-2.5 py-1.5 rounded border border-slate-300 text-slate-800 text-xs flex-1 select-all break-all">
+                  {currentRedirectUri}
+                </code>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(currentRedirectUri);
+                    setCopiedRedirectUri(true);
+                    setTimeout(() => setCopiedRedirectUri(false), 2500);
+                    toast({ title: "Copied!", description: "Redirect URI copied to clipboard." });
+                  }}
+                  className="shrink-0 h-8 text-xs bg-white"
+                >
+                  {copiedRedirectUri ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+                  {copiedRedirectUri ? "Copied" : "Copy URI"}
+                </Button>
+              </div>
+            </div>
+
+            {/* OAuth Client ID & Secret Inputs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">OAuth Client ID</Label>
+                <Input
+                  placeholder="e.g. 123456789-xxx.apps.googleusercontent.com"
+                  value={form.oauthClientId}
+                  onChange={(e) => setForm({ ...form, oauthClientId: e.target.value })}
+                  className="text-xs font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">OAuth Client Secret</Label>
+                <Input
+                  type="password"
+                  placeholder="e.g. GOCSPX-..."
+                  value={form.oauthClientSecret}
+                  onChange={(e) => setForm({ ...form, oauthClientSecret: e.target.value })}
+                  className="text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Connect / Disconnect Buttons */}
+            <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+              <div>
+                {driveStatus?.hasOauthRefreshToken || driveStatus?.userEmail ? (
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      Connected to Google Drive
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      Signed in as: <strong className="text-slate-900">{driveStatus.userEmail || "Google Account"}</strong> (15 GB Quota Active)
                     </p>
                   </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-sm text-slate-800">Ready to Connect</div>
+                    <p className="text-xs text-slate-500">Paste your Client ID &amp; Secret above, then click the button to authorize.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {driveStatus?.hasOauthRefreshToken && (
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      navigator.clipboard.writeText(detectedEmail);
-                      toast({ title: "Copied!", description: "Service Account email copied to clipboard." });
-                    }}
-                    className="shrink-0 h-8 text-xs bg-white border-blue-300 text-blue-800 hover:bg-blue-100"
+                    onClick={handleDisconnect}
+                    disabled={disconnectDrive.isPending}
+                    className="text-xs text-red-600 border-red-200 hover:bg-red-50"
                   >
-                    <Copy className="w-3.5 h-3.5 mr-1" /> Copy Email
+                    <LogOut className="w-3.5 h-3.5 mr-1" /> Disconnect
                   </Button>
-                </div>
-              ) : null;
-            })()}
-            <p className="text-xs text-slate-500">
-              Paste the entire JSON key file downloaded from Google Cloud Console. Your private key stays safely stored in your database.
-            </p>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleGoogleSignIn}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs shadow-sm flex items-center gap-2"
+                >
+                  <GoogleDriveIcon className="w-4 h-4" />
+                  {driveStatus?.hasOauthRefreshToken ? "Re-connect with Google" : "Sign in with Google to Connect"}
+                </Button>
+              </div>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">OAuth Client ID</Label>
-              <Input
-                placeholder="xxx.apps.googleusercontent.com"
-                value={form.oauthClientId}
-                onChange={(e) => setForm({ ...form, oauthClientId: e.target.value })}
-                className="text-xs"
-              />
+          <div className="space-y-3">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-xs leading-relaxed">
+              <strong>Notice:</strong> Google Cloud Service Accounts have <strong>0 MB storage quota</strong> on personal <code className="font-mono">@gmail.com</code> accounts and Google will reject file uploads with <code className="font-mono">storageQuotaExceeded</code>. Use Service Accounts only if uploading into a <strong>Google Workspace Shared Drive</strong>. For personal accounts, please switch to <strong>OAuth 2.0 Credentials</strong> above.
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">OAuth Client Secret</Label>
-              <Input
-                type="password"
-                placeholder="GOCSPX-..."
-                value={form.oauthClientSecret}
-                onChange={(e) => setForm({ ...form, oauthClientSecret: e.target.value })}
-                className="text-xs"
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Service Account Key (JSON)</Label>
+              <Textarea
+                placeholder='Paste full contents of your Google Service Account JSON key here: {"type": "service_account", "project_id": "...", "private_key": "...", "client_email": "..."}'
+                rows={5}
+                value={form.serviceAccountJson}
+                onChange={(e) => setForm({ ...form, serviceAccountJson: e.target.value })}
+                className="font-mono text-xs"
               />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <Label className="text-xs font-semibold">OAuth Refresh Token</Label>
-              <Input
-                type="password"
-                placeholder="1//04..."
-                value={form.oauthRefreshToken}
-                onChange={(e) => setForm({ ...form, oauthRefreshToken: e.target.value })}
-                className="text-xs"
-              />
+              {(() => {
+                let detectedEmail = "";
+                if (form.serviceAccountJson) {
+                  try {
+                    const parsed = JSON.parse(form.serviceAccountJson);
+                    detectedEmail = parsed.client_email || "";
+                  } catch (_) {}
+                }
+                return detectedEmail ? (
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 bg-blue-50/90 border border-blue-200 rounded-lg text-blue-900 text-xs gap-2">
+                    <div>
+                      <span className="font-semibold text-blue-950">Service Account Email:</span>
+                      <code className="ml-2 font-mono bg-white px-2 py-0.5 rounded border border-blue-200 text-blue-800 select-all font-semibold">
+                        {detectedEmail}
+                      </code>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(detectedEmail);
+                        toast({ title: "Copied!", description: "Service Account email copied to clipboard." });
+                      }}
+                      className="shrink-0 h-8 text-xs bg-white border-blue-300 text-blue-800 hover:bg-blue-100"
+                    >
+                      <Copy className="w-3.5 h-3.5 mr-1" /> Copy Email
+                    </Button>
+                  </div>
+                ) : null;
+              })()}
             </div>
           </div>
         )}
@@ -721,13 +858,13 @@ function GoogleDriveSettingsPanel() {
           <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs font-semibold">Root Folder ID (Optional)</Label>
             <Input
-              placeholder="e.g. 1A2B3C4D5E... (leave blank to auto-create 'LNB Invoicing Documents')"
+              placeholder="e.g. 1ACUM6XWGzUjZTekEudz1s2UwzLPtD7uK (leave blank to auto-create 'LNB Invoicing Documents')"
               value={form.rootFolderId}
               onChange={(e) => setForm({ ...form, rootFolderId: e.target.value })}
               className="text-xs font-mono"
             />
             <p className="text-xs text-slate-500">
-              If left blank, the app will automatically create and use a folder named <strong>LNB Invoicing Documents</strong>. If using a specific folder, make sure you share it with your Service Account email as Editor!
+              Leave blank to automatically create/find <strong>LNB Invoicing Documents</strong>, or paste the folder ID from your Google Drive URL.
             </p>
           </div>
 
@@ -788,26 +925,37 @@ function GoogleDriveSettingsPanel() {
       {/* Step by Step Guide Card */}
       <div className="bg-slate-100/70 p-5 rounded-xl border text-slate-700 space-y-3">
         <h4 className="font-semibold text-sm flex items-center gap-2 text-slate-900">
-          <Info className="w-4 h-4 text-blue-600" /> How to Set Up Google Drive Integration (in 3 Minutes)
+          <Info className="w-4 h-4 text-blue-600" /> How to Set Up OAuth 2.0 in Google Cloud (Takes 2 Minutes)
         </h4>
         <ol className="list-decimal list-inside space-y-2 text-xs text-slate-600 leading-relaxed">
           <li>
-            Go to the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-medium inline-flex items-center">Google Cloud Console <ExternalLink className="w-3 h-3 ml-0.5 inline" /></a> and create or select a project.
+            Open Google Cloud Console: <a href="https://console.cloud.google.com/apis/credentials?project=lnb-invoicing-system" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-medium inline-flex items-center">Credentials Page <ExternalLink className="w-3 h-3 ml-0.5 inline" /></a>.
           </li>
           <li>
-            Navigate to <strong>APIs &amp; Services &gt; Library</strong>, search for <strong>Google Drive API</strong>, and click <strong>Enable</strong>.
+            If you haven't set up the <strong>OAuth consent screen</strong> yet:
+            <ul className="list-disc list-inside ml-4 mt-1 space-y-1 text-slate-500">
+              <li>Click <strong>OAuth consent screen</strong> in the left menu &gt; select <strong>External</strong> &gt; click <strong>Create</strong>.</li>
+              <li>Enter App Name: <code className="font-mono text-slate-700">LNB Invoicing Maker</code>, enter your email <code className="font-mono text-slate-700">lnbhandari473@gmail.com</code> for user support and developer contact.</li>
+              <li>Click <strong>Save and Continue</strong> through the screens. (Under Test users, add your email <code className="font-mono text-slate-700">lnbhandari473@gmail.com</code>).</li>
+            </ul>
           </li>
           <li>
-            Go to <strong>APIs &amp; Services &gt; Credentials</strong>, click <strong>Create Credentials &gt; Service Account</strong>.
+            Click <strong>Create Credentials &gt; OAuth client ID</strong>.
           </li>
           <li>
-            After creating the service account, click on it, go to the <strong>Keys</strong> tab, click <strong>Add Key &gt; Create new key (JSON)</strong>, and download the JSON file.
+            Application type: select <strong>Web application</strong>.
           </li>
           <li>
-            Open Google Drive, create a folder named <strong>LNB Invoicing Documents</strong>, click <strong>Share</strong>, and add the Service Account email address with <strong>Editor</strong> access.
+            Under <strong>Authorized redirect URIs</strong>, click <strong>ADD URI</strong> and paste:
+            <code className="block mt-1 font-mono bg-white p-2 rounded border text-blue-800 select-all">
+              {currentRedirectUri}
+            </code>
           </li>
           <li>
-            Paste the contents of your downloaded JSON key into the box above and click <strong>Save Google Drive Settings</strong>!
+            Click <strong>CREATE</strong>. Copy the <strong>Client ID</strong> and <strong>Client Secret</strong>.
+          </li>
+          <li>
+            Paste them into the fields above and click <strong>Sign in with Google to Connect</strong>!
           </li>
         </ol>
       </div>

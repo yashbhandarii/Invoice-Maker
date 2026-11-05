@@ -20,6 +20,7 @@ interface GoogleDriveConfig {
   oauthClientId?: string;
   oauthClientSecret?: string;
   oauthRefreshToken?: string;
+  userEmail?: string;
 }
 
 interface CachedToken {
@@ -72,6 +73,7 @@ export async function getGoogleDriveConfig(): Promise<GoogleDriveConfig> {
     oauthClientId: settingsMap["googleDrive_oauthClientId"] || process.env.GOOGLE_OAUTH_CLIENT_ID || "",
     oauthClientSecret: settingsMap["googleDrive_oauthClientSecret"] || process.env.GOOGLE_OAUTH_CLIENT_SECRET || "",
     oauthRefreshToken: settingsMap["googleDrive_oauthRefreshToken"] || process.env.GOOGLE_OAUTH_REFRESH_TOKEN || "",
+    userEmail: settingsMap["googleDrive_userEmail"] || "",
   };
 }
 
@@ -331,7 +333,24 @@ export async function uploadPdfToDrive(params: {
 
   if (!uploadRes.ok) {
     const errText = await uploadRes.text();
-    throw new Error(`Google Drive upload failed (${uploadRes.status}): ${errText}`);
+    let parsedMsg = errText;
+    try {
+      const j = JSON.parse(errText);
+      parsedMsg = j.error?.message || errText;
+    } catch (_) {}
+
+    if (
+      uploadRes.status === 403 &&
+      (parsedMsg.includes("storageQuotaExceeded") ||
+        parsedMsg.includes("storage quota") ||
+        parsedMsg.includes("Service Accounts do not have storage quota"))
+    ) {
+      throw new Error(
+        `Google Drive upload rejected: Google Service Accounts have 0 bytes of storage quota on personal Google accounts (@gmail.com). ` +
+        `Please switch to "OAuth 2.0 Credentials" in Settings > Google Drive and click "Connect with Google" to upload with your personal 15 GB quota.`
+      );
+    }
+    throw new Error(`Google Drive upload failed (${uploadRes.status}): ${parsedMsg}`);
   }
 
   const uploadData = await uploadRes.json();

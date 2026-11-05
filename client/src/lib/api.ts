@@ -628,6 +628,9 @@ export interface GoogleDriveStatus {
   challansFolderName?: string;
   makePublic?: boolean;
   autoUpload?: boolean;
+  userEmail?: string;
+  hasOauthRefreshToken?: boolean;
+  oauthClientId?: string;
 }
 
 export function useGoogleDriveStatus() {
@@ -637,6 +640,23 @@ export function useGoogleDriveStatus() {
       const res = await fetch(`${API_BASE}/google-drive/status`);
       if (!res.ok) throw new Error("Failed to fetch Google Drive status");
       return res.json() as Promise<GoogleDriveStatus>;
+    },
+  });
+}
+
+export function useDisconnectGoogleDrive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API_BASE}/google-drive/oauth-disconnect`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to disconnect Google Drive");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["googleDriveStatus"] });
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
   });
 }

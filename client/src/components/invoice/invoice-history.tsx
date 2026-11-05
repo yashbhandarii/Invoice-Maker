@@ -125,8 +125,8 @@ export function InvoiceHistory({ onCreateNew, onEditInvoice }: InvoiceHistoryPro
           throw new Error("Content container not found");
         }
         const dataUrl = await toJpeg(historyShareContainerRef.current, {
-          quality: 0.9,
-          pixelRatio: 1.5,
+          quality: 0.96,
+          pixelRatio: 2.8,
           skipFonts: true,
           cacheBust: true,
         });
@@ -134,7 +134,7 @@ export function InvoiceHistory({ onCreateNew, onEditInvoice }: InvoiceHistoryPro
         const imgProps = pdf.getImageProperties(dataUrl);
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
+        pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "MEDIUM");
 
         const formattedDate = inv.date ? format(new Date(inv.date), "dd.MM.yyyy") : "";
         const fileName = `(LNB Invoice - ${inv.invoiceNo || "Draft"} ${formattedDate}).pdf`;

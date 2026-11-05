@@ -83,9 +83,10 @@ export default function InvoiceBuilder() {
 
     setIsSharing(true);
     try {
+      // High-resolution print-grade capture (2.8x pixelRatio ~300 DPI, visually lossless 0.96 quality)
       const dataUrl = await toJpeg(shareContainerRef.current, {
-        quality: 0.9,
-        pixelRatio: 1.5,
+        quality: 0.96,
+        pixelRatio: 2.8,
         skipFonts: true,
         cacheBust: true,
       });
@@ -94,7 +95,7 @@ export default function InvoiceBuilder() {
       const imgProps = pdf.getImageProperties(dataUrl);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
+      pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "MEDIUM");
 
       const formattedDate = currentInvoice.date ? format(new Date(currentInvoice.date), "dd.MM.yyyy") : "";
       const fileName = `(LNB Invoice - ${currentInvoice.invoiceNo || "Draft"} ${formattedDate}).pdf`;

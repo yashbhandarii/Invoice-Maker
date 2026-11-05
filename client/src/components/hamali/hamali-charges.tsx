@@ -459,7 +459,7 @@ export function HamaliCharges() {
                 const elementHeight = printRef.current.scrollHeight;
                 const elementWidth = printRef.current.scrollWidth;
                 const canvas = await html2canvas(printRef.current, {
-                    scale: 1.5,
+                    scale: 2.5,
                     backgroundColor: "#ffffff",
                     useCORS: true,
                     width: elementWidth,
@@ -468,7 +468,7 @@ export function HamaliCharges() {
                     windowWidth: elementWidth
                 });
 
-                const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                const imgData = canvas.toDataURL('image/jpeg', 0.96);
                 const pdfe = new jsPDF('p', 'mm', 'a4');
                 const pdfWidth = pdfe.internal.pageSize.getWidth();
                 const pdfHeight = pdfe.internal.pageSize.getHeight();
@@ -478,13 +478,13 @@ export function HamaliCharges() {
                 let heightLeft = imgHeight;
                 let position = 0;
 
-                pdfe.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+                pdfe.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'MEDIUM');
                 heightLeft -= pdfHeight;
 
                 while (heightLeft > 0) {
                     position -= pdfHeight;
                     pdfe.addPage();
-                    pdfe.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+                    pdfe.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'MEDIUM');
                     heightLeft -= pdfHeight;
                 }
 

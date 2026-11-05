@@ -103,8 +103,8 @@ export function DeliveryChallan() {
         try {
             // Using optimized pixelRatio: 1.5 for fast rendering on mobile
             const dataUrl = await toJpeg(ref.current, {
-                quality: 0.9,
-                pixelRatio: 1.5,
+                quality: 0.96,
+                pixelRatio: 2.8,
                 skipFonts: true,
                 cacheBust: true,
             });
@@ -118,7 +118,7 @@ export function DeliveryChallan() {
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-            pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
+            pdf.addImage(dataUrl, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "MEDIUM");
 
             const dateStr = shareData.date || new Date().toISOString().split('T')[0];
             const formattedDate = format(new Date(dateStr), "dd.MM.yyyy");

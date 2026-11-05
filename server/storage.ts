@@ -36,9 +36,12 @@ import {
 import { db } from "./db";
 import { eq, desc, lte, gte, and, or, like } from "drizzle-orm";
 import * as sqliteSchema from "@shared/sqlite-schema";
-import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
+import { createRequire } from "node:module";
 import path from "path";
+
+const requireMod = typeof require !== "undefined"
+  ? require
+  : createRequire(path.join(process.cwd(), "package.json"));
 
 
 export interface IStorage {
@@ -451,9 +454,28 @@ export class PostgresStorage implements IStorage {
   }
 }
 
-const sqliteDbFile = path.join(process.cwd(), "sqlite.db");
-const sqliteClient = new Database(sqliteDbFile);
-export const sqliteDb = drizzleSqlite(sqliteClient, { schema: sqliteSchema });
+let _sqliteDb: any = null;
+function getSqliteDb() {
+  if (!_sqliteDb) {
+    const Database = requireMod("better-sqlite3");
+    const { drizzle: drizzleSqlite } = requireMod("drizzle-orm/better-sqlite3");
+    const sqliteDbFile = path.join(process.cwd(), "sqlite.db");
+    const sqliteClient = new Database(sqliteDbFile);
+    _sqliteDb = drizzleSqlite(sqliteClient, { schema: sqliteSchema });
+  }
+  return _sqliteDb;
+}
+
+export const sqliteDb = new Proxy({} as any, {
+  get(_target, prop) {
+    const db = getSqliteDb();
+    const value = (db as any)[prop];
+    if (typeof value === "function") {
+      return value.bind(db);
+    }
+    return value;
+  }
+});
 
 const {
   users: sqUsers,

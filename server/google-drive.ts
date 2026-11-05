@@ -31,6 +31,17 @@ let cachedAccessToken: CachedToken | null = null;
 const folderCache = new Map<string, string>();
 
 /**
+ * Extract clean folder ID from raw input or full Google Drive URL
+ */
+export function extractFolderId(input?: string): string {
+  if (!input) return "";
+  let clean = input.trim();
+  const urlMatch = clean.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (urlMatch) return urlMatch[1];
+  return clean;
+}
+
+/**
  * Retrieve Google Drive configuration from DB settings or process.env
  */
 export async function getGoogleDriveConfig(): Promise<GoogleDriveConfig> {
@@ -190,7 +201,7 @@ export async function getOrCreateFolder(
   }
 
   const searchRes = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&spaces=drive`,
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&spaces=drive&supportsAllDrives=true&includeItemsFromAllDrives=true`,
     {
       headers: { Authorization: `Bearer ${accessToken}` },
     },
@@ -214,7 +225,7 @@ export async function getOrCreateFolder(
     createPayload.parents = [parentId];
   }
 
-  const createRes = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name", {
+  const createRes = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name&supportsAllDrives=true", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -243,7 +254,7 @@ export async function resolveTargetFolder(
   const config = await getGoogleDriveConfig();
 
   // Root folder: use configured rootFolderId if valid, otherwise create or find "LNB Invoicing Documents"
-  let rootId = config.rootFolderId?.trim();
+  let rootId = extractFolderId(config.rootFolderId);
   if (!rootId) {
     rootId = await getOrCreateFolder(accessToken, "LNB Invoicing Documents");
   }
@@ -306,7 +317,7 @@ export async function uploadPdfToDrive(params: {
   ]);
 
   const uploadRes = await fetch(
-    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink",
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink&supportsAllDrives=true",
     {
       method: "POST",
       headers: {
@@ -330,7 +341,7 @@ export async function uploadPdfToDrive(params: {
   if (config.makePublic && uploadData.id) {
     try {
       await fetch(
-        `https://www.googleapis.com/drive/v3/files/${uploadData.id}/permissions`,
+        `https://www.googleapis.com/drive/v3/files/${uploadData.id}/permissions?supportsAllDrives=true`,
         {
           method: "POST",
           headers: {
@@ -372,39 +383,99 @@ export async function testGoogleDriveConnection(override?: Partial<GoogleDriveCo
     const baseConfig = await getGoogleDriveConfig();
     const config = { ...baseConfig, ...(override || {}) };
 
-    // Query about information
-    const aboutRes = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
     let email = "";
+    let projectId = "";
     if (config.authType === "service_account" && config.serviceAccountJson) {
       try {
         const sa = typeof config.serviceAccountJson === "string" ? JSON.parse(config.serviceAccountJson) : config.serviceAccountJson;
         email = sa.client_email || "";
+        projectId = sa.project_id || "";
       } catch (_) {}
     }
-    if (!email && aboutRes.ok) {
-      const about = await aboutRes.json();
-      email = about.user?.emailAddress || "";
+
+    // 1. Verify Drive API access via /about endpoint
+    const aboutRes = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!aboutRes.ok) {
+      const errorText = await aboutRes.text();
+      let parsedError = errorText;
+      try {
+        const jsonErr = JSON.parse(errorText);
+        parsedError = jsonErr.error?.message || errorText;
+      } catch (_) {}
+
+      // Check if Google Drive API is not enabled in Google Cloud Console
+      if (
+        aboutRes.status === 403 &&
+        (parsedError.includes("has not been used") ||
+          parsedError.includes("disabled") ||
+          parsedError.includes("Drive API") ||
+          parsedError.includes("SERVICE_DISABLED"))
+      ) {
+        const enableUrl = `https://console.cloud.google.com/apis/library/drive.googleapis.com?project=${projectId || "lnb-invoicing-system"}`;
+        throw new Error(
+          `Google Drive API is NOT enabled in your Google Cloud Project (${projectId || "lnb-invoicing-system"}). Please click this link in your browser to enable it: ${enableUrl}`
+        );
+      }
+      throw new Error(`Google Drive API verification failed (${aboutRes.status}): ${parsedError}`);
     }
 
-    // Verify root folder or create default
-    let rootFolderId = config.rootFolderId?.trim();
+    const aboutData = await aboutRes.json();
+    if (!email) {
+      email = aboutData.user?.emailAddress || "";
+    }
+
+    // 2. Verify root folder or create/find default
+    let rootFolderId = extractFolderId(config.rootFolderId);
     if (rootFolderId) {
       const folderRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${rootFolderId}?fields=id,name`,
+        `https://www.googleapis.com/drive/v3/files/${rootFolderId}?fields=id,name,capabilities,trashed&supportsAllDrives=true`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
       );
       if (!folderRes.ok) {
-        throw new Error(`Cannot access configured Root Folder ID '${rootFolderId}'. Please make sure you clicked 'Share' on this folder in Google Drive and added the Service Account email (${email || "your service account"}) as Editor.`);
+        const errorText = await folderRes.text();
+        console.error("Google Drive folder access error:", folderRes.status, errorText);
+        let parsedError = errorText;
+        try {
+          const jsonErr = JSON.parse(errorText);
+          parsedError = jsonErr.error?.message || errorText;
+        } catch (_) {}
+
+        if (folderRes.status === 404) {
+          throw new Error(
+            `Folder ID '${rootFolderId}' was not found in Google Drive (Google 404: File not found). Please verify you copied the exact folder ID from your Google Drive URL.`
+          );
+        } else if (folderRes.status === 403) {
+          throw new Error(
+            `Permission denied for Folder ID '${rootFolderId}' (Google 403: ${parsedError}). Please ensure the folder in Google Drive is shared with '${email || "your service account"}' as Editor.`
+          );
+        }
+        throw new Error(
+          `Cannot access configured Root Folder ID '${rootFolderId}' (Google error ${folderRes.status}: ${parsedError}). Please make sure you shared this folder in Google Drive with '${email || "your service account"}' as Editor.`
+        );
       }
+
       const folderData = await folderRes.json();
+      if (folderData.trashed) {
+        throw new Error(
+          `The folder '${folderData.name}' (${rootFolderId}) is in your Google Drive Trash. Please restore it or specify another folder.`
+        );
+      }
+
+      // Check Editor permissions if available
+      if (folderData.capabilities && folderData.capabilities.canAddChildren === false) {
+        throw new Error(
+          `Service account '${email}' only has Viewer permission on folder '${folderData.name}'. Please change its role to 'Editor' in Google Drive share settings so files can be uploaded.`
+        );
+      }
+
       return {
         ok: true,
-        message: "Successfully connected to Google Drive!",
+        message: `Successfully connected to Google Drive folder "${folderData.name}"!`,
         email,
         rootFolderId,
         rootFolderName: folderData.name,

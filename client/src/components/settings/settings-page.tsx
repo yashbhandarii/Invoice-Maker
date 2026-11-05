@@ -570,14 +570,29 @@ function GoogleDriveSettingsPanel() {
       </div>
 
       {testResult && (
-        <div className={`p-3.5 rounded-lg text-xs flex items-center gap-2 border ${
-          testResult.ok ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-red-50 text-red-800 border-red-200"
+        <div className={`p-4 rounded-xl text-xs flex items-start gap-3 border ${
+          testResult.ok ? "bg-emerald-50 text-emerald-900 border-emerald-200" : "bg-red-50 text-red-900 border-red-200"
         }`}>
-          {testResult.ok ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
-          <div>
-            <span className="font-semibold">{testResult.ok ? "Connected successfully" : "Connection error"}: </span>
-            {testResult.message}
-            {testResult.email && <span className="block mt-0.5 text-slate-600 dark:text-slate-400">Account: {testResult.email}</span>}
+          {testResult.ok ? (
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" />
+          ) : (
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-600 mt-0.5" />
+          )}
+          <div className="space-y-1.5 flex-1">
+            <div className="font-semibold text-sm">
+              {testResult.ok ? "Google Drive Connected Successfully!" : "Connection Error"}
+            </div>
+            <p className="leading-relaxed whitespace-pre-wrap">{testResult.message}</p>
+            {testResult.ok && (
+              <p className="font-medium text-emerald-700 bg-emerald-100/60 p-2 rounded border border-emerald-200 mt-1">
+                Tip: Remember to click the <strong>&quot;Save Google Drive Settings&quot;</strong> button below to save these credentials to your system!
+              </p>
+            )}
+            {testResult.email && (
+              <div className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
+                Service Account: {testResult.email}
+              </div>
+            )}
           </div>
         </div>
       )}

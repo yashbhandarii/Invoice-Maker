@@ -67,28 +67,31 @@ export async function getGoogleDriveConfig(): Promise<GoogleDriveConfig> {
 /**
  * Obtain an OAuth2 access token for Google Drive API
  */
-export async function getAccessToken(): Promise<string> {
-  // Check in-memory cache with 60s buffer
-  if (cachedAccessToken && cachedAccessToken.expiresAt > Date.now() + 60000) {
+export async function getAccessToken(override?: Partial<GoogleDriveConfig>): Promise<string> {
+  const hasOverride = override && Object.keys(override).some(k => (override as any)[k]);
+  
+  // Check in-memory cache with 60s buffer (only if using saved config)
+  if (!hasOverride && cachedAccessToken && cachedAccessToken.expiresAt > Date.now() + 60000) {
     return cachedAccessToken.token;
   }
 
-  const config = await getGoogleDriveConfig();
+  const baseConfig = await getGoogleDriveConfig();
+  const config: GoogleDriveConfig = { ...baseConfig, ...(override || {}) };
 
   if (config.authType === "service_account") {
-    if (!config.serviceAccountJson) {
-      throw new Error("Google Drive Service Account key is not configured. Please add it in Settings > Google Drive.");
+    if (!config.serviceAccountJson || !config.serviceAccountJson.trim()) {
+      throw new Error("No Service Account JSON key found. Please paste your downloaded Google Cloud Service Account JSON key into the box above.");
     }
 
     let sa: ServiceAccountCredentials;
     try {
       sa = typeof config.serviceAccountJson === "string" ? JSON.parse(config.serviceAccountJson) : config.serviceAccountJson;
     } catch (e: any) {
-      throw new Error(`Invalid Service Account JSON: ${e.message}`);
+      throw new Error(`Invalid Service Account JSON format: ${e.message}. Please paste the entire unedited JSON file.`);
     }
 
     if (!sa.client_email || !sa.private_key) {
-      throw new Error("Service Account JSON must contain 'client_email' and 'private_key'.");
+      throw new Error("The Service Account JSON is missing 'client_email' or 'private_key'. Please ensure you created a Service Account Key in Google Cloud Console.");
     }
 
     // Sign JWT using native Node crypto RS256
@@ -120,15 +123,18 @@ export async function getAccessToken(): Promise<string> {
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`Google Auth failed (${res.status}): ${err}`);
+      throw new Error(`Google Authentication failed (${res.status}): ${err}`);
     }
 
     const data = await res.json();
-    cachedAccessToken = {
-      token: data.access_token,
-      expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
-    };
-    return cachedAccessToken.token;
+    const token = data.access_token;
+    if (!hasOverride) {
+      cachedAccessToken = {
+        token,
+        expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+      };
+    }
+    return token;
   } else {
     // OAuth 2.0 with Refresh Token
     if (!config.oauthClientId || !config.oauthClientSecret || !config.oauthRefreshToken) {
@@ -152,11 +158,14 @@ export async function getAccessToken(): Promise<string> {
     }
 
     const data = await res.json();
-    cachedAccessToken = {
-      token: data.access_token,
-      expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
-    };
-    return cachedAccessToken.token;
+    const token = data.access_token;
+    if (!hasOverride) {
+      cachedAccessToken = {
+        token,
+        expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+      };
+    }
+    return token;
   }
 }
 
@@ -351,7 +360,7 @@ export async function uploadPdfToDrive(params: {
 /**
  * Test Google Drive connection and check permissions
  */
-export async function testGoogleDriveConnection(): Promise<{
+export async function testGoogleDriveConnection(override?: Partial<GoogleDriveConfig>): Promise<{
   ok: boolean;
   message: string;
   email?: string;
@@ -359,8 +368,9 @@ export async function testGoogleDriveConnection(): Promise<{
   rootFolderName?: string;
 }> {
   try {
-    const token = await getAccessToken();
-    const config = await getGoogleDriveConfig();
+    const token = await getAccessToken(override);
+    const baseConfig = await getGoogleDriveConfig();
+    const config = { ...baseConfig, ...(override || {}) };
 
     // Query about information
     const aboutRes = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
@@ -383,7 +393,7 @@ export async function testGoogleDriveConnection(): Promise<{
         },
       );
       if (!folderRes.ok) {
-        throw new Error(`Cannot access configured Root Folder ID '${rootFolderId}'. Please ensure the folder is shared with the service account/user.`);
+        throw new Error(`Cannot access configured Root Folder ID '${rootFolderId}'. Please make sure you clicked 'Share' on this folder in Google Drive and added the Service Account email (${email || "your service account"}) as Editor.`);
       }
       const folderData = await folderRes.json();
       return {

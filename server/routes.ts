@@ -1361,7 +1361,8 @@ export async function registerRoutes(
 
   app.post("/api/google-drive/test", async (req, res) => {
     try {
-      const result = await testGoogleDriveConnection();
+      const override = req.body || {};
+      const result = await testGoogleDriveConnection(override);
       if (result.ok) {
         res.json(result);
       } else {

@@ -643,8 +643,12 @@ export function useGoogleDriveStatus() {
 
 export function useTestGoogleDrive() {
   return useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${API_BASE}/google-drive/test`, { method: "POST" });
+    mutationFn: async (payload?: Record<string, any>) => {
+      const res = await fetch(`${API_BASE}/google-drive/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload ? JSON.stringify(payload) : undefined,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Connection test failed");
       return data as { ok: boolean; message: string; email?: string; rootFolderName?: string };

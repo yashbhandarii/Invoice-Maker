@@ -495,8 +495,23 @@ function GoogleDriveSettingsPanel() {
 
   const handleTest = async () => {
     setTestResult(null);
+    if (form.authType === "service_account" && (!form.serviceAccountJson || !form.serviceAccountJson.trim())) {
+      toast({
+        title: "Key Required",
+        description: "Please paste your Service Account JSON key into the box below first.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
-      const res = await testConnection.mutateAsync();
+      const res = await testConnection.mutateAsync({
+        authType: form.authType,
+        serviceAccountJson: form.serviceAccountJson,
+        rootFolderId: form.rootFolderId,
+        oauthClientId: form.oauthClientId,
+        oauthClientSecret: form.oauthClientSecret,
+        oauthRefreshToken: form.oauthRefreshToken,
+      });
       setTestResult(res);
       toast({
         title: "Connection Successful!",
@@ -541,7 +556,7 @@ function GoogleDriveSettingsPanel() {
             size="sm"
             variant="outline"
             onClick={handleTest}
-            disabled={testConnection.isPending || (!form.serviceAccountJson && !form.oauthRefreshToken)}
+            disabled={testConnection.isPending}
             className="text-xs bg-white dark:bg-slate-900 border-slate-300 shadow-sm"
           >
             {testConnection.isPending ? (

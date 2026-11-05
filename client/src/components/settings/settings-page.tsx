@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { useBackups, useCreateBackup, useMigrateToCloud, useGoogleDriveStatus, useTestGoogleDrive } from "@/lib/api";
-import { Download, Database, Cloud, HardDrive, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Key, FolderOpen, Info } from "lucide-react";
+import { Download, Database, Cloud, HardDrive, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Key, FolderOpen, Info, Copy } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -624,6 +624,40 @@ function GoogleDriveSettingsPanel() {
               onChange={(e) => setForm({ ...form, serviceAccountJson: e.target.value })}
               className="font-mono text-xs"
             />
+            {(() => {
+              let detectedEmail = "";
+              if (form.serviceAccountJson) {
+                try {
+                  const parsed = JSON.parse(form.serviceAccountJson);
+                  detectedEmail = parsed.client_email || "";
+                } catch (_) {}
+              }
+              return detectedEmail ? (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 bg-blue-50/90 border border-blue-200 rounded-lg text-blue-900 text-xs gap-2">
+                  <div>
+                    <span className="font-semibold text-blue-950">Service Account Email:</span>
+                    <code className="ml-2 font-mono bg-white px-2 py-0.5 rounded border border-blue-200 text-blue-800 select-all font-semibold">
+                      {detectedEmail}
+                    </code>
+                    <p className="mt-1 text-[11px] text-blue-700">
+                      Share your Google Drive folder (<strong>{form.rootFolderId || "Root Folder"}</strong>) with this email address as <strong>Editor</strong>.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(detectedEmail);
+                      toast({ title: "Copied!", description: "Service Account email copied to clipboard." });
+                    }}
+                    className="shrink-0 h-8 text-xs bg-white border-blue-300 text-blue-800 hover:bg-blue-100"
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-1" /> Copy Email
+                  </Button>
+                </div>
+              ) : null;
+            })()}
             <p className="text-xs text-slate-500">
               Paste the entire JSON key file downloaded from Google Cloud Console. Your private key stays safely stored in your database.
             </p>

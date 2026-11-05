@@ -378,7 +378,13 @@ export async function testGoogleDriveConnection(override?: Partial<GoogleDriveCo
     });
 
     let email = "";
-    if (aboutRes.ok) {
+    if (config.authType === "service_account" && config.serviceAccountJson) {
+      try {
+        const sa = typeof config.serviceAccountJson === "string" ? JSON.parse(config.serviceAccountJson) : config.serviceAccountJson;
+        email = sa.client_email || "";
+      } catch (_) {}
+    }
+    if (!email && aboutRes.ok) {
       const about = await aboutRes.json();
       email = about.user?.emailAddress || "";
     }
